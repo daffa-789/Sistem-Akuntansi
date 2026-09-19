@@ -133,6 +133,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS journal_templates (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  company_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  lines_json JSON NOT NULL,
+  created_by BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_template_company FOREIGN KEY (company_id) REFERENCES companies(id),
+  CONSTRAINT fk_template_user FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
 INSERT INTO companies (id, name, currency)
 VALUES (1, 'Perusahaan Anda', 'IDR')
 ON DUPLICATE KEY UPDATE id = id;

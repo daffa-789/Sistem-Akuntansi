@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: Number(env.VITE_PORT || 3000),
+      strictPort: true,
       proxy: { '/api': { target: `http://localhost:${env.PORT || 5000}`, changeOrigin: true } }
     },
     build: {
@@ -15,7 +16,7 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             charts: ['recharts'],
-            export: ['xlsx', 'jspdf', 'jspdf-autotable']
+            export: ['exceljs', 'jspdf', 'jspdf-autotable']
           }
         }
       }

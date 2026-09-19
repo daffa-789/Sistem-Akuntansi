@@ -12,6 +12,17 @@ Finova adalah aplikasi akuntansi single-company berbahasa Indonesia. Transaksi d
 - Jurnal umum, buku besar, neraca saldo, laba rugi, neraca posisi keuangan, perubahan modal, dan arus kas langsung.
 - Tutup buku bulanan dengan jurnal penutup pendapatan/beban ke laba ditahan dan penguncian periode.
 - Unduh laporan aktif sebagai `.xlsx` atau `.pdf`.
+- Nomor bukti jurnal otomatis berformat `JRN-YYYYMM-001` per bulan.
+- Pencarian global akun dan navigasi cepat via `Ctrl+K`.
+- Template jurnal cepat untuk transaksi berulang (gaji, sewa, penyusutan).
+- Riwayat audit per jurnal: siapa yang membuat, memposting, dan mengubah.
+- Mode gelap/terang toggle.
+- Panduan onboarding interaktif saat login pertama kali.
+- Validasi form jurnal secara real-time dengan peringatan per baris.
+- Format angka ribuan otomatis pada input nominal.
+- Shortcut keyboard: `Ctrl+Enter` (Posting), `Ctrl+S` (Draft), `Esc` (Tutup modal).
+- Multi-baris sekaligus (+5 / +10 baris).
+- Cetak laporan langsung dari browser (`Ctrl+P`).
 
 ## Menjalankan lokal
 
@@ -49,6 +60,16 @@ Unduh template dari halaman **Impor Excel**. Sheet pertama membutuhkan kolom ber
 
 Sistem menolak akun tidak aktif, periode terkunci, nomor bukti yang sudah ada, serta jurnal yang tidak seimbang. Tidak ada jurnal yang diposting bila satu entri dalam batch tidak lolos validasi.
 
+## Shortcut Keyboard
+
+| Shortcut | Fungsi |
+| --- | --- |
+| `Ctrl+K` | Pencarian global (akun, halaman) |
+| `Ctrl+Enter` | Posting jurnal (di dalam modal) |
+| `Ctrl+S` | Simpan draft jurnal (di dalam modal) |
+| `Esc` | Tutup modal |
+| `Ctrl+P` | Cetak laporan aktif |
+
 ## Perintah kualitas
 
 ```powershell
@@ -61,3 +82,5 @@ Test mencakup keseimbangan jurnal, neraca saldo, laporan laba rugi/neraca, perub
 ## Batas versi pertama
 
 Finova mendukung perusahaan jasa dan dagang tunggal dengan Rupiah dan tahun buku Januari–Desember. PPN, pajak penghasilan, manufaktur, register aset tetap, bank feed, dan pemetaan Excel bebas belum termasuk.
+
+</content>

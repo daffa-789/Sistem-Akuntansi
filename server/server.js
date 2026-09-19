@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser'
 import multer from 'multer'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { pool, withTransaction } from './db.js'
 import {
   amount, assertBalancedLines, accountBalance, calculateAccountBalances,
@@ -155,8 +155,8 @@ function flatten(entries) { return entries.flatMap((entry) => entry.lines.map((l
 function periodDateFromExcel(value) {
   if (value instanceof Date && !Number.isNaN(value)) return value.toISOString().slice(0, 10)
   if (typeof value === 'number') {
-    const date = XLSX.SSF.parse_date_code(value)
-    if (date) return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`
+    const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000)
+    if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10)
   }
   const text = String(value || '').trim()
   const iso = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
@@ -164,6 +164,13 @@ function periodDateFromExcel(value) {
   const id = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
   if (id) return `${id[3]}-${String(id[2]).padStart(2, '0')}-${String(id[1]).padStart(2, '0')}`
   return null
+}
+
+function worksheetCellValue(cell) {
+  const value = cell?.value
+  if (value && typeof value === 'object' && 'result' in value) return value.result ?? ''
+  if (value && typeof value === 'object' && Array.isArray(value.richText)) return value.richText.map((part) => part.text).join('')
+  return value ?? ''
 }
 
 function excelAmount(value) {
@@ -175,10 +182,19 @@ function excelAmount(value) {
 }
 
 async function parseImport(buffer, connection, companyId) {
-  const book = XLSX.read(buffer, { type: 'buffer', cellDates: true })
-  const sheet = book.Sheets[book.SheetNames[0]]
+  const book = new ExcelJS.Workbook()
+  await book.xlsx.load(buffer)
+  const sheet = book.worksheets[0]
   if (!sheet) throw fail(422, 'Workbook tidak memiliki sheet.')
-  const sourceRows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true })
+  const headers = new Map()
+  sheet.getRow(1).eachCell({ includeEmpty: false }, (cell, column) => headers.set(String(worksheetCellValue(cell)).trim(), column))
+  const sourceRows = []
+  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return
+    const rowData = {}
+    for (const [header, column] of headers) rowData[header] = worksheetCellValue(row.getCell(column))
+    if (Object.values(rowData).some((value) => String(value).trim() !== '')) sourceRows.push(rowData)
+  })
   if (!sourceRows.length) throw fail(422, 'Sheet Excel tidak memiliki transaksi.')
   const [accounts] = await connection.query('SELECT id, code, name, is_active FROM accounts WHERE company_id = ?', [companyId])
   const accountByCode = new Map(accounts.map((account) => [String(account.code), account]))
@@ -321,12 +337,38 @@ app.get('/api/journals', authenticate, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 app.get('/api/journals/:id', authenticate, async (req, res, next) => { try { res.json({ entry: await fetchEntry(pool, req.user.company_id, req.params.id) }) } catch (error) { next(error) } })
+app.get('/api/journals/:id/audit', authenticate, async (req, res, next) => {
+  try {
+    const [logs] = await pool.query('SELECT a.*, u.name AS user_name FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id WHERE a.company_id = ? AND a.entity_type = ? AND a.entity_id = ? ORDER BY a.created_at DESC', [req.user.company_id, 'JOURNAL_ENTRY', req.params.id])
+    const actionLabels = { CREATED: 'Jurnal dibuat', POSTED: 'Jurnal diposting', UPDATED: 'Jurnal diubah', REVERSED: 'Jurnal dibalikkan' }
+    res.json({ logs: logs.map(l => ({ ...l, action_label: actionLabels[l.action] || l.action })) })
+  } catch (error) { next(error) }
+})
+app.get('/api/journals/next-voucher', authenticate, async (req, res, next) => {
+  try {
+    const ym = new Date().toISOString().slice(0, 7).replace('-', '')
+    const prefix = `JRN-${ym}-`
+    const [rows] = await pool.query("SELECT voucher_no FROM journal_entries WHERE company_id = ? AND voucher_no LIKE ? ORDER BY id DESC LIMIT 1", [req.user.company_id, `${prefix}%`])
+    let seq = 1
+    if (rows[0]) { const m = rows[0].voucher_no.match(/-(\d+)$/); if (m) seq = Number(m[1]) + 1 }
+    res.json({ voucherNo: `${prefix}${String(seq).padStart(3, '0')}` })
+  } catch (error) { next(error) }
+})
 app.post('/api/journals', authenticate, async (req, res, next) => {
   try {
     const { voucherNo, entryDate, description, lines, status = 'DRAFT' } = req.body
     if (!description || !entryDate || !['DRAFT', 'POSTED'].includes(status)) throw fail(422, 'Tanggal, keterangan, dan status jurnal tidak valid.')
-    const id = await withTransaction((connection) => writeEntry(connection, { companyId: req.user.company_id, userId: req.user.id, voucherNo: voucherNo || `JRN-${Date.now()}`, entryDate, description, lines, status }))
-    res.status(201).json({ id })
+    let finalVoucher = voucherNo
+    if (!finalVoucher) {
+      const ym = entryDate.slice(0, 7).replace('-', '')
+      const prefix = `JRN-${ym}-`
+      const [rows] = await pool.query("SELECT voucher_no FROM journal_entries WHERE company_id = ? AND voucher_no LIKE ? ORDER BY id DESC LIMIT 1", [req.user.company_id, `${prefix}%`])
+      let seq = 1
+      if (rows[0]) { const m = rows[0].voucher_no.match(/-(\d+)$/); if (m) seq = Number(m[1]) + 1 }
+      finalVoucher = `${prefix}${String(seq).padStart(3, '0')}`
+    }
+    const id = await withTransaction((connection) => writeEntry(connection, { companyId: req.user.company_id, userId: req.user.id, voucherNo: finalVoucher, entryDate, description, lines, status }))
+    res.status(201).json({ id, voucherNo: finalVoucher })
   } catch (error) { next(error) }
 })
 app.put('/api/journals/:id', authenticate, async (req, res, next) => {
@@ -375,16 +417,24 @@ app.post('/api/journals/:id/reverse', authenticate, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.get('/api/imports/template', authenticate, adminOnly, (_req, res) => {
-  const workbook = XLSX.utils.book_new()
-  const sheet = XLSX.utils.json_to_sheet([
-    { Tanggal: '2026-01-01', NoBukti: 'JRN-001', Keterangan: 'Setoran modal awal', KodeAkun: '1100', Debit: 10000000, Kredit: 0 },
-    { Tanggal: '2026-01-01', NoBukti: 'JRN-001', Keterangan: 'Setoran modal awal', KodeAkun: '3100', Debit: 0, Kredit: 10000000 }
-  ])
-  XLSX.utils.book_append_sheet(workbook, sheet, 'Jurnal')
-  const bytes = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
-  res.setHeader('Content-Disposition', 'attachment; filename=template-jurnal-finova.xlsx')
-  res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').send(bytes)
+app.get('/api/imports/template', authenticate, adminOnly, async (_req, res, next) => {
+  try {
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Jurnal')
+    sheet.columns = [
+      { header: 'Tanggal', key: 'Tanggal', width: 15 }, { header: 'NoBukti', key: 'NoBukti', width: 18 },
+      { header: 'Keterangan', key: 'Keterangan', width: 32 }, { header: 'KodeAkun', key: 'KodeAkun', width: 14 },
+      { header: 'Debit', key: 'Debit', width: 16 }, { header: 'Kredit', key: 'Kredit', width: 16 }
+    ]
+    sheet.addRows([
+      { Tanggal: '2026-01-01', NoBukti: 'JRN-001', Keterangan: 'Setoran modal awal', KodeAkun: '1100', Debit: 10000000, Kredit: 0 },
+      { Tanggal: '2026-01-01', NoBukti: 'JRN-001', Keterangan: 'Setoran modal awal', KodeAkun: '3100', Debit: 0, Kredit: 10000000 }
+    ])
+    sheet.getRow(1).font = { bold: true }
+    const bytes = await workbook.xlsx.writeBuffer()
+    res.setHeader('Content-Disposition', 'attachment; filename=template-jurnal-finova.xlsx')
+    res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').send(Buffer.from(bytes))
+  } catch (error) { next(error) }
 })
 app.post('/api/imports/preview', authenticate, adminOnly, upload.single('file'), async (req, res, next) => {
   try {
@@ -477,10 +527,39 @@ app.post('/api/periods/:id/close', authenticate, adminOnly, async (req, res, nex
   } catch (error) { next(error) }
 })
 
+app.get('/api/templates', authenticate, async (req, res, next) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM journal_templates WHERE company_id = ? ORDER BY name', [req.user.company_id])
+    res.json({ templates: rows.map(r => ({ ...r, lines: JSON.parse(r.lines_json || '[]') })) })
+  } catch (error) { next(error) }
+})
+app.post('/api/templates', authenticate, async (req, res, next) => {
+  try {
+    const { name, description, lines } = req.body
+    if (!name || !lines?.length) throw fail(422, 'Nama template dan baris jurnal wajib diisi.')
+    const [result] = await pool.query('INSERT INTO journal_templates (company_id, name, description, lines_json, created_by) VALUES (?, ?, ?, ?, ?)', [req.user.company_id, name, description || '', JSON.stringify(lines), req.user.id])
+    res.status(201).json({ id: result.insertId })
+  } catch (error) { next(error) }
+})
+app.delete('/api/templates/:id', authenticate, async (req, res, next) => {
+  try {
+    await pool.query('DELETE FROM journal_templates WHERE id = ? AND company_id = ?', [req.params.id, req.user.company_id])
+    res.json({ ok: true })
+  } catch (error) { next(error) }
+})
+
 app.use((error, _req, res, _next) => {
   if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Data duplikat: kode, email, nomor bukti, atau berkas impor sudah digunakan.' })
-  console.error(error)
-  return res.status(error.status || 500).json({ message: error.status ? error.message : 'Terjadi kesalahan pada server.' })
+  const status = error.status || 500
+  if (status >= 500) console.error(error)
+  const messages = {
+    'Silakan masuk terlebih dahulu.': 'Anda belum masuk. Silakan login terlebih dahulu.',
+    'Sesi tidak lagi aktif.': 'Sesi Anda telah berakhir. Silakan login kembali.',
+    'Sesi tidak valid atau sudah berakhir.': 'Sesi tidak valid. Silakan login kembali.',
+    'Fitur ini hanya dapat diakses admin.': 'Hanya administrator yang dapat mengakses fitur ini.',
+  }
+  const msg = messages[error.message] || error.message || 'Terjadi kesalahan pada server. Silakan coba lagi.'
+  return res.status(status).json({ message: msg })
 })
 
 ensureBootstrap().then(() => console.log('Bootstrap Finova siap.')).catch((error) => console.error('Bootstrap database tertunda:', error.message))
