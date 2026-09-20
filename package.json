@@ -4,15 +4,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev.js",
+    "dev": "tsx scripts/dev.ts",
     "dev:frontend": "node node_modules/vite/bin/vite.js",
-    "server": "node server/server.js",
-    "server:dev": "node --watch server/server.js",
+    "server": "tsx server/server.ts",
+    "server:dev": "tsx watch server/server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "db:init": "node scripts/init-db.js",
-    "db:clean": "node scripts/clean-database.js"
+    "typecheck": "tsc --noEmit",
+    "db:init": "tsx scripts/init-db.ts",
+    "db:clean": "tsx scripts/clean-database.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -32,12 +33,24 @@
     "recharts": "^2.15.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
     "jsdom": "^25.0.1",
     "postcss": "^8.5.2",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
     "vite": "^6.1.0",
     "vitest": "^5.0.1"
   },
