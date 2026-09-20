@@ -1,86 +1,101 @@
-# Finova — Sistem Akuntansi Otomatis
+# Finova — Sistem Akuntansi & Pembukuan Indonesia
 
-Finova adalah aplikasi akuntansi single-company berbahasa Indonesia. Transaksi dicatat sebagai jurnal debit-kredit, lalu dipakai langsung untuk membentuk laporan keuangan dan ekspor Excel/PDF.
+Finova adalah aplikasi akuntansi berbahasa Indonesia yang dirancang khusus agar rapi, mudah, dan menyenangkan digunakan—baik untuk operasional bisnis maupun untuk siswa dan mahasiswa akuntansi yang sedang mempelajari siklus akuntansi (*Jurnal Umum -> Buku Besar -> Neraca Saldo -> Laporan Keuangan*).
 
-## Kemampuan utama
+Aplikasi ini menggunakan **database lokal SQLite mandiri (`better-sqlite3`)**, sehingga **tidak membutuhkan server MySQL, XAMPP, atau phpMyAdmin**. Seluruh data tersimpan otomatis di dalam file lokal `database/finova.sqlite` dan siap dipakai secara instan begitu dijalankan.
 
-- Login berbasis peran **Admin** dan **Staf**.
-- Chart of Accounts Indonesia bawaan yang dapat ditambah, diubah, atau dinonaktifkan admin.
-- Jurnal manual dengan validasi akun aktif, periode terbuka, minimal dua baris, dan debit = kredit.
-- Draft jurnal dapat diubah; jurnal terposting dikoreksi menggunakan jurnal pembalik.
-- Impor template Excel dengan pratinjau, validasi, pesan kesalahan per baris, dan posting batch atomik.
-- Jurnal umum, buku besar, neraca saldo, laba rugi, neraca posisi keuangan, perubahan modal, dan arus kas langsung.
-- Tutup buku bulanan dengan jurnal penutup pendapatan/beban ke laba ditahan dan penguncian periode.
-- Unduh laporan aktif sebagai `.xlsx` atau `.pdf`.
-- Nomor bukti jurnal otomatis berformat `JRN-YYYYMM-001` per bulan.
-- Pencarian global akun dan navigasi cepat via `Ctrl+K`.
-- Template jurnal cepat untuk transaksi berulang (gaji, sewa, penyusutan).
-- Riwayat audit per jurnal: siapa yang membuat, memposting, dan mengubah.
-- Mode gelap/terang toggle.
-- Panduan onboarding interaktif saat login pertama kali.
-- Validasi form jurnal secara real-time dengan peringatan per baris.
-- Format angka ribuan otomatis pada input nominal.
-- Shortcut keyboard: `Ctrl+Enter` (Posting), `Ctrl+S` (Draft), `Esc` (Tutup modal).
-- Multi-baris sekaligus (+5 / +10 baris).
-- Cetak laporan langsung dari browser (`Ctrl+P`).
+---
 
-## Menjalankan lokal
+## Kemampuan & Fitur Utama
 
-Prasyarat: Node.js 20+, MySQL 8 / MySQL XAMPP yang aktif.
+### 1. Database Lokal Mandiri (Zero-Setup)
+- Berbasis npm package `better-sqlite3` dengan mode Write-Ahead Logging (WAL) yang super cepat.
+- **Auto-bootstrap**: Otomatis membuat tabel, Bagan Akun Indonesia lengkap (36 akun standar), periode akuntansi, akun administrator, template transaksi, dan data jurnal awal saat pertama kali dijalankan.
+- Tidak perlu install XAMPP, menyalakan Apache/MySQL, atau membuat database di phpMyAdmin.
+
+### 2. Standar Laporan Jurnal Umum (General Journal)
+- **Format Buku Jurnal Klasik Sesuai Standar Akuntansi Indonesia (SAK / SMK & Kampus)**:
+  - Akun **Debit** ditulis rata kiri dengan huruf tegas.
+  - Akun **Kredit** ditulis **menjorok ke kanan (*indented*)** dengan simbol penunjuk `↳`.
+  - Keterangan memo transaksi dicetak miring (*italic*) di bawah nama akun.
+  - Kolom **Ref** (Referensi posting kode akun).
+  - Baris **Total Jurnal Umum** dengan garis ganda (*double-underline*) khas akuntansi dan indikator status seimbang (*Balanced*).
+- **Tabel Rekapitulasi Jurnal Umum**:
+  - Menyajikan ringkasan total per akun Debit vs Kredit sebelum diposting ke Buku Besar.
+- **Fitur Cetak & Ekspor Resmi**:
+  - **Cetak Dokumen**: Layout cetak rapi siap print ke kertas A4 / simpan ke PDF dengan kop nama perusahaan dan lembar tanda tangan pengesahan (Dibuat Oleh Staf, Diperiksa Oleh Dosen/Auditor, Disetujui Oleh Pimpinan).
+  - **Ekspor Excel (`.xlsx`)**: Berisi sheet Jurnal Umum lengkap dengan format angka uang serta sheet Rekapitulasi Jurnal.
+  - **Ekspor PDF (`.pdf`)**: Layout tabel profesional siap presentasi atau pengumpulan tugas.
+
+### 3. Pencatatan Jurnal Ramah Pelajar Akuntansi
+- **Panduan Saldo Normal (ALERE Cheat Sheet)**:
+  - Penjelasan interaktif persamaan dasar akuntansi (*Aset = Liabilitas + Ekuitas*) dan aturan penambahan/pengurangan akun (*Aset/Beban di Debit, Liabilitas/Ekuitas/Pendapatan di Kredit*).
+- **Indikator Keseimbangan Cerdas (Real-time Balance Indicator)**:
+  - Menampilkan selisih nominal secara langsung dan memberi tahu sisi mana yang kurang (misal: *"⚠️ Sisi Kredit kurang Rp 1.500.000"*).
+- **Tombol Auto-Balance**:
+  - Otomatis menghitung selisih dan mengisinya ke baris akun yang kosong secara instan.
+- **13 Template Transaksi Akuntansi Siap Pakai**:
+  - Setoran Modal Awal, Beli Perlengkapan Tunai, Beli Peralatan Kredit, Pendapatan Jasa Tunai/Kredit, Pelunasan Piutang, Pembayaran Utang Usaha, Beban Gaji, Beban Sewa, Beban Utilitas, Prive Pemilik, hingga Jurnal Penyesuaian (AJP Pemakaian Perlengkapan & Penyusutan Peralatan).
+
+### 4. Siklus Akuntansi Terintegrasi
+- **Buku Besar (General Ledger)**: Menampilkan mutasi per akun dengan perhitungan saldo berjalan otomatis (*running balance*).
+- **Neraca Saldo (Trial Balance)**: Memverifikasi keseimbangan debit dan kredit seluruh akun.
+- **Bagan Akun (Chart of Accounts)**: Eksplorasi akun berdasarkan kelompok (Aktiva, Liabilitas, Ekuitas, Pendapatan, Beban) dan saldo normalnya.
+- **Dashboard Keuangan**: Grafik kinerja pendapatan vs beban serta indikator kas & bank real-time.
+
+---
+
+## Cara Menjalankan Aplikasi
+
+Prasyarat: **Node.js versi 20+** (disarankan Node.js 22 atau 24).
 
 ```powershell
+# 1. Masuk ke folder proyek
+cd "c:\Users\Daffa\Desktop\Sistem Akuntansi"
+
+# 2. Salin variabel lingkungan (jika belum ada .env)
 Copy-Item .env.example .env
-# Nyalakan MySQL di XAMPP Control Panel terlebih dahulu
+
+# 3. Pasang dependensi npm
 npm install
-npm run db:init
+
+# 4. Jalankan aplikasi (Frontend Vite & Backend Server berjalan bersamaan)
 npm run dev
 ```
 
-Frontend tersedia di `http://localhost:3000` dan API di `http://localhost:5000`. Setelah API pertama kali berjalan, akun admin dibuat dari nilai `ADMIN_*` pada `.env`:
+- Frontend dapat diakses di: `http://localhost:3000`
+- API Backend berjalan di: `http://localhost:5000`
+- Database tersimpan di: `database/finova.sqlite`
 
+### Akun Awal Sistem
 ```text
-Email: admin@finova.local
-Kata sandi: Admin123!
+Email      : admin@finova.local
+Kata Sandi : Admin123!
 ```
 
-Ganti `JWT_SECRET` dan kredensial admin sebelum lingkungan produksi. Jika database XAMPP berbeda, sesuaikan `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, dan `DB_NAME` pada `.env` terlebih dahulu.
+---
 
-## Format impor Excel
-
-Unduh template dari halaman **Impor Excel**. Sheet pertama membutuhkan kolom berikut:
-
-| Kolom | Keterangan |
-| --- | --- |
-| `Tanggal` | `YYYY-MM-DD` atau `DD/MM/YYYY` |
-| `NoBukti` | Nomor unik; baris dengan nomor sama menjadi satu jurnal |
-| `Keterangan` | Uraian jurnal |
-| `KodeAkun` | Kode aktif pada Chart of Accounts, mis. `1100` |
-| `Debit` | Isi salah satu dari Debit/Kredit |
-| `Kredit` | Isi salah satu dari Debit/Kredit |
-
-Sistem menolak akun tidak aktif, periode terkunci, nomor bukti yang sudah ada, serta jurnal yang tidak seimbang. Tidak ada jurnal yang diposting bila satu entri dalam batch tidak lolos validasi.
-
-## Shortcut Keyboard
-
-| Shortcut | Fungsi |
-| --- | --- |
-| `Ctrl+K` | Pencarian global (akun, halaman) |
-| `Ctrl+Enter` | Posting jurnal (di dalam modal) |
-| `Ctrl+S` | Simpan draft jurnal (di dalam modal) |
-| `Esc` | Tutup modal |
-| `Ctrl+P` | Cetak laporan aktif |
-
-## Perintah kualitas
+## Perintah Tambahan
 
 ```powershell
+# Reset / Inisialisasi ulang database lokal jika dibutuhkan
+npm run db:init
+
+# Menjalankan unit test logika akuntansi & database
 npm test
+
+# Membangun bundle produksi
 npm run build
 ```
 
-Test mencakup keseimbangan jurnal, neraca saldo, laporan laba rugi/neraca, perubahan modal (termasuk prive), arus kas, dan jurnal penutup. Build memvalidasi seluruh aplikasi React JSX untuk produksi.
+---
 
-## Batas versi pertama
+## Pintasan Keyboard (Shortcuts)
 
-Finova mendukung perusahaan jasa dan dagang tunggal dengan Rupiah dan tahun buku Januari–Desember. PPN, pajak penghasilan, manufaktur, register aset tetap, bank feed, dan pemetaan Excel bebas belum termasuk.
-
-</content>
+| Shortcut | Fungsi |
+| --- | --- |
+| `Ctrl+K` | Pencarian global akun cepat |
+| `Ctrl+Enter` | Posting jurnal langsung (di dalam modal) |
+| `Ctrl+S` | Simpan draft jurnal (di dalam modal) |
+| `Esc` | Menutup jendela modal / pop-up |
+| `Ctrl+P` | Cetak dokumen / laporan aktif |

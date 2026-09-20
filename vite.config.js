@@ -7,16 +7,18 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: Number(env.VITE_PORT || 3000),
-      strictPort: true,
+      strictPort: false,
       proxy: { '/api': { target: `http://localhost:${env.PORT || 5000}`, changeOrigin: true } }
     },
     build: {
-      chunkSizeWarningLimit: 700,
+      chunkSizeWarningLimit: 1200,
       rollupOptions: {
         output: {
           manualChunks: {
+            vendor: ['react', 'react-dom'],
             charts: ['recharts'],
-            export: ['exceljs', 'jspdf', 'jspdf-autotable']
+            excel: ['exceljs'],
+            pdf: ['jspdf', 'jspdf-autotable']
           }
         }
       }

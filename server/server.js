@@ -41,20 +41,24 @@ function setAuthCookie(res, user) {
 
 async function ensureBootstrap() {
   const [companies] = await pool.query('SELECT id FROM companies WHERE id = 1')
-  if (!companies.length) await pool.query("INSERT INTO companies (id, name, currency) VALUES (1, 'Perusahaan Anda', 'IDR')")
+  if (!companies.length) await pool.query("INSERT INTO companies (id, name, currency) VALUES (1, 'PT Finova Akuntansi Indonesia', 'IDR')")
   const [users] = await pool.query("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1")
+  let adminId = users[0]?.id
   if (!users.length) {
     const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'Admin123!', 12)
-    await pool.query('INSERT INTO users (company_id, name, email, password_hash, role) VALUES (1, ?, ?, ?, \'ADMIN\')', [
+    const [res] = await pool.query('INSERT INTO users (company_id, name, email, password_hash, role) VALUES (1, ?, ?, ?, \'ADMIN\')', [
       process.env.ADMIN_NAME || 'Administrator', (process.env.ADMIN_EMAIL || 'admin@finova.local').toLowerCase(), hash
     ])
+    adminId = res.insertId
   }
   const year = new Date().getFullYear()
   for (let month = 1; month <= 12; month += 1) {
     const start = `${year}-${String(month).padStart(2, '0')}-01`
     const end = new Date(year, month, 0).toISOString().slice(0, 10)
-    await pool.query('INSERT IGNORE INTO accounting_periods (company_id, name, start_date, end_date) VALUES (1, ?, ?, ?)', [`${String(month).padStart(2, '0')}/${year}`, start, end])
+    await pool.query('INSERT OR IGNORE INTO accounting_periods (company_id, name, start_date, end_date) VALUES (1, ?, ?, ?)', [`${String(month).padStart(2, '0')}/${year}`, start, end])
   }
+
+  // Database dibiarkan kosongan sesuai permintaan pengguna (tidak ada seed data/transaksi)
 }
 
 async function authenticate(req, _res, next) {
@@ -475,7 +479,40 @@ app.get('/api/reports/:kind', authenticate, async (req, res, next) => {
     const periodLines = flatten(context.periodEntries)
     let data
     switch (req.params.kind) {
-      case 'journal': data = context.periodEntries; break
+      case 'journal': {
+        const entries = context.periodEntries
+        const debitMap = new Map()
+        const creditMap = new Map()
+        let totalDebit = 0
+        let totalCredit = 0
+        for (const e of entries) {
+          for (const l of e.lines) {
+            if (l.debit > 0) {
+              const cur = debitMap.get(l.code) || { code: l.code, name: l.account_name, amount: 0 }
+              cur.amount = amount(cur.amount + l.debit)
+              debitMap.set(l.code, cur)
+              totalDebit = amount(totalDebit + l.debit)
+            }
+            if (l.credit > 0) {
+              const cur = creditMap.get(l.code) || { code: l.code, name: l.account_name, amount: 0 }
+              cur.amount = amount(cur.amount + l.credit)
+              creditMap.set(l.code, cur)
+              totalCredit = amount(totalCredit + l.credit)
+            }
+          }
+        }
+        data = {
+          entries,
+          recap: {
+            debits: [...debitMap.values()].sort((a, b) => a.code.localeCompare(b.code)),
+            credits: [...creditMap.values()].sort((a, b) => a.code.localeCompare(b.code)),
+            totalDebit,
+            totalCredit,
+            isBalanced: Math.abs(totalDebit - totalCredit) < 0.005
+          }
+        }
+        break
+      }
       case 'trial-balance': data = buildTrialBalance(context.accounts, allLines); break
       case 'income-statement': data = buildIncomeStatement(context.accounts, periodLines); break
       case 'balance-sheet': data = buildBalanceSheet(context.accounts, allLines); break
@@ -549,7 +586,14 @@ app.delete('/api/templates/:id', authenticate, async (req, res, next) => {
 })
 
 app.use((error, _req, res, _next) => {
-  if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Data duplikat: kode, email, nomor bukti, atau berkas impor sudah digunakan.' })
+  if (
+    error.code === 'ER_DUP_ENTRY' ||
+    error.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+    error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
+    String(error.message || '').includes('UNIQUE constraint failed')
+  ) {
+    return res.status(409).json({ message: 'Data duplikat: kode, email, nomor bukti, atau berkas impor sudah digunakan.' })
+  }
   const status = error.status || 500
   if (status >= 500) console.error(error)
   const messages = {
