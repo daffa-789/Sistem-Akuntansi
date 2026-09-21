@@ -1,15 +1,28 @@
-# Finova — Sistem Akuntansi & Pembukuan Indonesia
+# Finova — Sistem Akuntansi & Pembukuan Web Terpadu Indonesia
 
-Finova adalah aplikasi akuntansi berbahasa Indonesia yang dirancang khusus agar rapi, mudah, dan menyenangkan digunakan—baik untuk operasional bisnis maupun untuk siswa dan mahasiswa akuntansi yang sedang mempelajari siklus akuntansi (*Jurnal Umum -> Buku Besar -> Neraca Saldo -> Laporan Keuangan*).
+Finova adalah aplikasi sistem informasi akuntansi berbasis web (**Full-Stack TypeScript & React**) yang dirancang khusus agar rapi, interaktif, dan mudah digunakan—baik untuk operasional pembukuan UMKM/bisnis maupun untuk siswa dan mahasiswa akuntansi yang sedang mempelajari siklus akuntansi lengkap (*Jurnal Umum -> Buku Besar -> Neraca Saldo -> Laporan Keuangan*).
 
-Aplikasi ini menggunakan **database lokal SQLite mandiri (`better-sqlite3`)**, sehingga **tidak membutuhkan server MySQL, XAMPP, atau phpMyAdmin**. Seluruh data tersimpan otomatis di dalam file lokal `database/finova.sqlite` dan siap dipakai secara instan begitu dijalankan.
+Aplikasi ini menggunakan **database lokal SQLite mandiri (`better-sqlite3`)**, sehingga **tidak membutuhkan server MySQL, XAMPP, atau phpMyAdmin**. Seluruh data tersimpan otomatis di dalam file lokal `database/finova.sqlite` dan siap dipakai secara instan begitu aplikasi dijalankan.
 
 ---
 
-## Kemampuan & Fitur Utama
+## 🛠️ Tech Stack & Arsitektur
+
+- **Frontend**: [React 18](https://react.dev/) + **TSX** (Strict TypeScript)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + Custom Glassmorphism Theme (Light & Dark Mode)
+- **Build Tool**: [Vite](https://vitejs.dev/) + `@vitejs/plugin-react`
+- **Backend Runtime**: [Node.js](https://nodejs.org/) + [Express](https://expressjs.com/) via [tsx](https://github.com/privatenumber/tsx) (Zero-build TypeScript execution)
+- **Database**: SQLite 3 via `better-sqlite3` dengan mode Write-Ahead Logging (WAL) berkinerja tinggi
+- **Shared Types**: `shared/types.ts` sebagai *single source of truth* kontrak data (Frontend & Backend)
+- **Testing**: [Vitest](https://vitest.dev/) untuk pengujian unit logika akuntansi dan database layer
+- **Export Engine**: ExcelJS (`.xlsx`) & jsPDF / html2canvas (`.pdf`)
+
+---
+
+## ✨ Kemampuan & Fitur Utama
 
 ### 1. Database Lokal Mandiri (Zero-Setup)
-- Berbasis npm package `better-sqlite3` dengan mode Write-Ahead Logging (WAL) yang super cepat.
+- Berbasis npm package `better-sqlite3` dengan mode Write-Ahead Logging (WAL) yang super cepat dan aman.
 - **Auto-bootstrap**: Otomatis membuat tabel, Bagan Akun Indonesia lengkap (36 akun standar), periode akuntansi, akun administrator, template transaksi, dan data jurnal awal saat pertama kali dijalankan.
 - Tidak perlu install XAMPP, menyalakan Apache/MySQL, atau membuat database di phpMyAdmin.
 
@@ -27,7 +40,7 @@ Aplikasi ini menggunakan **database lokal SQLite mandiri (`better-sqlite3`)**, s
   - **Ekspor Excel (`.xlsx`)**: Berisi sheet Jurnal Umum lengkap dengan format angka uang serta sheet Rekapitulasi Jurnal.
   - **Ekspor PDF (`.pdf`)**: Layout tabel profesional siap presentasi atau pengumpulan tugas.
 
-### 3. Pencatatan Jurnal Ramah Pelajar Akuntansi
+### 3. Pencatatan Jurnal Ramah Pengguna
 - **Panduan Saldo Normal (ALERE Cheat Sheet)**:
   - Penjelasan interaktif persamaan dasar akuntansi (*Aset = Liabilitas + Ekuitas*) dan aturan penambahan/pengurangan akun (*Aset/Beban di Debit, Liabilitas/Ekuitas/Pendapatan di Kredit*).
 - **Indikator Keseimbangan Cerdas (Real-time Balance Indicator)**:
@@ -35,67 +48,126 @@ Aplikasi ini menggunakan **database lokal SQLite mandiri (`better-sqlite3`)**, s
 - **Tombol Auto-Balance**:
   - Otomatis menghitung selisih dan mengisinya ke baris akun yang kosong secara instan.
 - **13 Template Transaksi Akuntansi Siap Pakai**:
-  - Setoran Modal Awal, Beli Perlengkapan Tunai, Beli Peralatan Kredit, Pendapatan Jasa Tunai/Kredit, Pelunasan Piutang, Pembayaran Utang Usaha, Beban Gaji, Beban Sewa, Beban Utilitas, Prive Pemilik, hingga Jurnal Penyesuaian (AJP Pemakaian Perlengkapan & Penyusutan Peralatan).
+  - Setoran Modal Awal, Beli Perlengkapan Tunai, Beli Peralatan Kredit, Pendapatan Jasa Tunai/Kredit, Pelunasan Piutang, Pembayaran Utang Usaha, Beban Gaji, Beban Sewa, Beban Utilitas, Prive Pemilik, hingga Jurnal Penyesuaian (AJP).
 
 ### 4. Siklus Akuntansi Terintegrasi
 - **Buku Besar (General Ledger)**: Menampilkan mutasi per akun dengan perhitungan saldo berjalan otomatis (*running balance*).
 - **Neraca Saldo (Trial Balance)**: Memverifikasi keseimbangan debit dan kredit seluruh akun.
 - **Bagan Akun (Chart of Accounts)**: Eksplorasi akun berdasarkan kelompok (Aktiva, Liabilitas, Ekuitas, Pendapatan, Beban) dan saldo normalnya.
 - **Dashboard Keuangan**: Grafik kinerja pendapatan vs beban serta indikator kas & bank real-time.
+- **Otentikasi & Keamanan**: Dukungan login multi-peran (Admin & Staf Keuangan) dengan cookie aman dan sesi JWT.
 
 ---
 
-## Cara Menjalankan Aplikasi
+## 📁 Struktur Proyek
 
-Prasyarat: **Node.js versi 20+** (disarankan Node.js 22 atau 24).
+```text
+Sistem-Akuntansi/
+├── database/               # Schema SQL dan file database SQLite lokal
+│   ├── finova.sqlite       # Database lokal aktif (WAL mode)
+│   └── schema.sqlite.sql   # DDL skema database relasional
+├── scripts/                # Otomasi TypeScript (dijalankan via tsx)
+│   ├── dev.ts              # Launcher simultan frontend Vite + backend API
+│   ├── init-db.ts          # Skrip inisialisasi & seeder database lokal
+│   └── clean-database.ts   # Skrip pembersihan data transaksi / reset
+├── server/                 # Backend Node.js + Express (TypeScript)
+│   ├── accounting.ts       # Logika kalkulasi akuntansi & validasi ALERE
+│   ├── accounting.test.ts  # Unit test logika akuntansi
+│   ├── db.ts               # SQLite connection pool & transaction manager
+│   ├── db.test.ts          # Unit test SQLite layer
+│   └── server.ts           # REST API endpoints & otentikasi JWT
+├── shared/                 # Shared domain types (Frontend & Backend)
+│   └── types.ts            # Tipe Akun, Jurnal, Laporan, User, Periode
+├── src/                    # Frontend React 18 + TSX
+│   ├── components/
+│   │   ├── layout/         # AppShell, OnboardingWalkthrough
+│   │   ├── modals/         # JournalModal, TemplateModal, AuditLog, dsb.
+│   │   ├── ui/             # Reusable UI (Button, Modal, Badge, Empty, dsb.)
+│   │   └── views/          # Dashboard, Accounts, Journals, Ledger, TrialBalance, Login
+│   ├── hooks/              # Custom hooks (useLoad)
+│   ├── services/           # excelExporter (ExcelJS)
+│   ├── utils/              # formatters & validators
+│   ├── api.ts              # Strongly-typed HTTP client
+│   ├── App.tsx             # Root layout & view switcher
+│   ├── main.tsx            # React DOM mounting
+│   └── vite-env.d.ts       # Ambient Vite types
+├── index.html              # HTML entry point (mengarah ke /src/main.tsx)
+├── tsconfig.json           # Konfigurasi TypeScript compiler (strict: true)
+├── vite.config.ts          # Konfigurasi Vite & path alias (@/* & @shared/*)
+├── tailwind.config.js      # Konfigurasi Tailwind CSS
+└── package.json            # Script & dependensi proyek
+```
 
-```powershell
-# 1. Masuk ke folder proyek
-cd "c:\Users\Daffa\Desktop\Sistem Akuntansi"
+---
 
-# 2. Salin variabel lingkungan (jika belum ada .env)
-Copy-Item .env.example .env
+## 🌐 Cara Menjalankan Aplikasi Web
 
-# 3. Pasang dependensi npm
+### Prasyarat
+- [Node.js](https://nodejs.org/) versi 18 atau lebih baru.
+- npm (bawaan dari Node.js).
+
+### 🚀 1. Mode Pengembangan (Development)
+Untuk menjalankan frontend (Vite) dan backend (Express API) secara bersamaan:
+
+```bash
+# 1. Pasang dependensi
 npm install
 
-# 4. Jalankan aplikasi (Frontend Vite & Backend Server berjalan bersamaan)
+# 2. Jalankan server pengembangan
 npm run dev
 ```
 
-- Frontend dapat diakses di: `http://localhost:3000`
-- API Backend berjalan di: `http://localhost:5000`
-- Database tersimpan di: `database/finova.sqlite`
+Aplikasi akan otomatis berjalan di:
+- **Frontend**: [http://localhost:3000](http://localhost:3000)
+- **Backend API**: [http://localhost:5000](http://localhost:5000)
 
-### Akun Awal Sistem
-```text
-Email      : admin@finova.local
-Kata Sandi : Admin123!
-```
+Buka peramban (*web browser*) Anda ke **`http://localhost:3000`**.
 
 ---
 
-## Perintah Tambahan
+### 📦 2. Mode Produksi (Production Build & Run)
+Untuk mengompilasi bundel statis dan menjalankan server produksi mandiri:
 
-```powershell
-# Reset / Inisialisasi ulang database lokal jika dibutuhkan
-npm run db:init
-
-# Menjalankan unit test logika akuntansi & database
-npm test
-
-# Membangun bundle produksi
+```bash
+# 1. Kompilasi frontend dan backend
 npm run build
+
+# 2. Jalankan server produksi
+npm start
 ```
+
+Aplikasi siap diakses di [http://localhost:5000](http://localhost:5000).
 
 ---
 
-## Pintasan Keyboard (Shortcuts)
+## 🔑 Akun Masuk Bawaan (Default Login)
+
+Saat pertama kali membuka website, gunakan akun administrator bawaan berikut:
+- **Email**: `admin@finova.local`
+- **Kata Sandi**: `Admin123!`
+
+---
+
+## 💻 Daftar Perintah npm
+
+| Perintah | Deskripsi |
+| --- | --- |
+| `npm run dev` | Menjalankan Frontend Vite (`:3000`) & Backend API (`:5000`) simultan |
+| `npm run dev:frontend` | Menjalankan hanya server frontend Vite |
+| `npm run dev:server` | Menjalankan backend Express dengan auto-reload via `tsx watch` |
+| `npm run build` | Mengompilasi bundle produksi frontend (`dist/`) dan server (`dist-server/`) |
+| `npm start` | Menjalankan aplikasi web produksi dari bundle server |
+| `npm run preview` | Melakukan pratinjau hasil build client Vite |
+| `npm run typecheck` | Menjalankan pemeriksaan tipe TypeScript seluruh proyek (`tsc --noEmit`) |
+| `npm test` | Menjalankan seluruh unit test (Vitest) untuk logika akuntansi & database |
+| `npm run db:init` | Menginisialisasi ulang database SQLite lokal dengan data standar |
+| `npm run db:clean` | Mengosongkan data transaksi dan mereset ke saldo awal |
+
+---
+
+## ⌨️ Pintasan Keyboard Global
 
 | Shortcut | Fungsi |
 | --- | --- |
-| `Ctrl+K` | Pencarian global akun cepat |
-| `Ctrl+Enter` | Posting jurnal langsung (di dalam modal) |
-| `Ctrl+S` | Simpan draft jurnal (di dalam modal) |
-| `Esc` | Menutup jendela modal / pop-up |
-| `Ctrl+P` | Cetak dokumen / laporan aktif |
+| `Ctrl+K` | Pencarian global akun dan menu cepat |
+| `Esc` | Menutup jendela dialog / modal aktif |

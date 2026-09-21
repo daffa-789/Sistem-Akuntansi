@@ -1,17 +1,16 @@
 import React, { ReactNode } from 'react'
 import {
-  BookOpen, FileBarChart, Landmark, LayoutDashboard, LogOut,
-  Moon, PenLine, ReceiptText, Search, Sun, LucideIcon
+  BookOpen, FileBarChart, Landmark, LayoutDashboard,
+  Moon, PenLine, ReceiptText, Search, Sun, LogOut, LucideIcon
 } from 'lucide-react'
 import { Company, PublicUser } from '../../../shared/types.js'
 
-export type NavRoute = 'dashboard' | 'journals' | 'journal-report' | 'ledger' | 'trial-balance' | 'accounts'
+export type NavRoute = 'dashboard' | 'journals' | 'ledger' | 'trial-balance' | 'accounts'
 
 export const NAV_ITEMS: [NavRoute, string, LucideIcon][] = [
   ['dashboard', 'Dashboard', LayoutDashboard],
-  ['journals', 'Catat Jurnal', PenLine],
-  ['journal-report', 'Laporan Jurnal', ReceiptText],
-  ['ledger', 'Buku Besar', BookOpen],
+  ['journals', 'Jurnal Umum', BookOpen],
+  ['ledger', 'Buku Besar', ReceiptText],
   ['trial-balance', 'Neraca Saldo', FileBarChart],
   ['accounts', 'Bagan Akun (CoA)', Landmark]
 ]
@@ -41,6 +40,26 @@ export function AppShell({
 }: AppShellProps): React.JSX.Element {
   const currentItem = NAV_ITEMS.find(([k]) => k === route) || NAV_ITEMS[0]
 
+  const [signers, setSigners] = React.useState<{ maker: string; checker: string; approver: string }>(() => {
+    try {
+      const raw = localStorage.getItem('finova_signers')
+      if (raw) return JSON.parse(raw)
+    } catch {}
+    return {
+      maker: 'Staf Keuangan',
+      checker: 'Auditor / Penguji',
+      approver: 'Pimpinan / Direktur'
+    }
+  })
+
+  function updateSigner(field: 'maker' | 'checker' | 'approver', value: string) {
+    setSigners((prev) => {
+      const next = { ...prev, [field]: value }
+      localStorage.setItem('finova_signers', JSON.stringify(next))
+      return next
+    })
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Menu Aplikasi">
@@ -65,10 +84,74 @@ export function AppShell({
             </button>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          Sistem Akuntansi Terpadu.
-          <br />
-          Pencatatan standar, audit jejak lengkap, &amp; bebas database eksternal.
+        <div className="sidebar-bottom" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.15)', marginTop: 20, paddingTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#a7f3d0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+            Pengesahan Dokumen
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+            <div>
+              <label style={{ display: 'block', color: '#bbf7d0', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
+                DIBUAT OLEH:
+              </label>
+              <input
+                type="text"
+                value={signers.maker}
+                onChange={(e) => updateSigner('maker', e.target.value)}
+                placeholder="Staf Keuangan"
+                style={{
+                  width: '100%',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  color: '#ffffff',
+                  fontSize: 11
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', color: '#bbf7d0', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
+                DIPERIKSA OLEH:
+              </label>
+              <input
+                type="text"
+                value={signers.checker}
+                onChange={(e) => updateSigner('checker', e.target.value)}
+                placeholder="Auditor / Penguji"
+                style={{
+                  width: '100%',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  color: '#ffffff',
+                  fontSize: 11
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', color: '#bbf7d0', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
+                DISETUJUI OLEH:
+              </label>
+              <input
+                type="text"
+                value={signers.approver}
+                onChange={(e) => updateSigner('approver', e.target.value)}
+                placeholder="Pimpinan / Direktur"
+                style={{
+                  width: '100%',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  color: '#ffffff',
+                  fontSize: 11
+                }}
+              />
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -109,9 +192,10 @@ export function AppShell({
             <button
               type="button"
               className="icon-button"
-              title="Keluar dari sesi"
-              aria-label="Keluar dari sesi"
+              title="Keluar / Logout"
+              aria-label="Keluar dari akun"
               onClick={onLogout}
+              style={{ marginLeft: 4 }}
             >
               <LogOut size={16} aria-hidden="true" />
             </button>

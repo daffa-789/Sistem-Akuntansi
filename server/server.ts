@@ -1,4 +1,6 @@
 import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 import dotenv from 'dotenv'
 import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
@@ -104,14 +106,19 @@ async function ensureBootstrap(): Promise<void> {
 async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
     const token = req.cookies.finova_token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-    if (!token) throw fail(401, 'Silakan masuk terlebih dahulu.')
-    const claims = jwt.verify(token, jwtSecret) as unknown as AuthClaims
-    const [rows] = await pool.query<AuthenticatedUser[]>('SELECT id, company_id, name, email, role, is_active FROM users WHERE id = ?', [claims.sub])
-    if (!rows[0] || !rows[0].is_active) throw fail(401, 'Sesi tidak lagi aktif.')
-    req.user = rows[0]
-    next()
-  } catch (error: any) {
-    next(error.status ? error : fail(401, 'Sesi tidak valid atau sudah berakhir.'))
+    if (token) {
+      try {
+        const claims = jwt.verify(token, jwtSecret) as unknown as AuthClaims
+        const [rows] = await pool.query<AuthenticatedUser[]>('SELECT id, company_id, name, email, role, is_active FROM users WHERE id = ?', [claims.sub])
+        if (rows[0] && rows[0].is_active) {
+          req.user = rows[0]
+          return next()
+        }
+      } catch {}
+    }
+    return next(fail(401, 'Silakan masuk terlebih dahulu.'))
+  } catch (_err) {
+    return next(fail(401, 'Silakan masuk terlebih dahulu.'))
   }
 }
 
@@ -464,6 +471,20 @@ app.get('/api/journals', authenticate, async (req: Request, res: Response, next:
   } catch (error) { next(error) }
 })
 
+app.get('/api/journals/next-voucher', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ym = new Date().toISOString().slice(0, 7).replace('-', '')
+    const prefix = `JRN-${ym}-`
+    const [rows] = await pool.query<{ voucher_no: string }[]>('SELECT voucher_no FROM journal_entries WHERE company_id = ? AND voucher_no LIKE ? ORDER BY id DESC LIMIT 1', [req.user.company_id, `${prefix}%`])
+    let seq = 1
+    if (rows[0]) {
+      const m = rows[0].voucher_no.match(/-(\d+)$/)
+      if (m) seq = Number(m[1]) + 1
+    }
+    res.json({ voucherNo: `${prefix}${String(seq).padStart(3, '0')}` })
+  } catch (error) { next(error) }
+})
+
 app.get('/api/journals/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
@@ -477,20 +498,6 @@ app.get('/api/journals/:id/audit', authenticate, async (req: Request, res: Respo
     const [logs] = await pool.query<any[]>('SELECT a.*, u.name AS user_name FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id WHERE a.company_id = ? AND a.entity_type = ? AND a.entity_id = ? ORDER BY a.created_at DESC', [req.user.company_id, 'JOURNAL_ENTRY', id])
     const actionLabels: Record<string, string> = { CREATED: 'Jurnal dibuat', POSTED: 'Jurnal diposting', UPDATED: 'Jurnal diubah', REVERSED: 'Jurnal dibalikkan' }
     res.json({ logs: logs.map((l: any) => ({ ...l, action_label: actionLabels[l.action] || l.action })) })
-  } catch (error) { next(error) }
-})
-
-app.get('/api/journals/next-voucher', authenticate, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const ym = new Date().toISOString().slice(0, 7).replace('-', '')
-    const prefix = `JRN-${ym}-`
-    const [rows] = await pool.query<{ voucher_no: string }[]>('SELECT voucher_no FROM journal_entries WHERE company_id = ? AND voucher_no LIKE ? ORDER BY id DESC LIMIT 1', [req.user.company_id, `${prefix}%`])
-    let seq = 1
-    if (rows[0]) {
-      const m = rows[0].voucher_no.match(/-(\d+)$/)
-      if (m) seq = Number(m[1]) + 1
-    }
-    res.json({ voucherNo: `${prefix}${String(seq).padStart(3, '0')}` })
   } catch (error) { next(error) }
 })
 
@@ -548,6 +555,19 @@ app.post('/api/journals/:id/post', authenticate, async (req: Request, res: Respo
       assertBalancedLines(entry.lines)
       await connection.query("UPDATE journal_entries SET status = 'POSTED', posted_by = ?, posted_at = datetime('now', 'localtime') WHERE id = ?", [req.user.id, entry.id])
       await audit(connection, req.user.company_id, req.user.id, 'JOURNAL_ENTRY', entry.id, 'POSTED')
+    })
+    res.json({ ok: true })
+  } catch (error) { next(error) }
+})
+
+app.delete('/api/journals/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+    await withTransaction(async (connection) => {
+      const entry = await fetchEntry(connection, req.user.company_id, id)
+      await connection.query('DELETE FROM journal_lines WHERE journal_entry_id = ?', [entry.id])
+      await connection.query('DELETE FROM journal_entries WHERE id = ?', [entry.id])
+      await audit(connection, req.user.company_id, req.user.id, 'JOURNAL_ENTRY', entry.id, 'DELETED')
     })
     res.json({ ok: true })
   } catch (error) { next(error) }
@@ -836,7 +856,24 @@ app.use((error: AppError, _req: Request, res: Response, _next: NextFunction) => 
   return res.status(status).json({ message: msg })
 })
 
-ensureBootstrap().then(() => console.log('Bootstrap Finova siap.')).catch((error) => console.error('Bootstrap database tertunda:', error.message))
-app.listen(port, () => console.log(`Finova API berjalan di http://localhost:${port}`))
+// Sajikan berkas frontend produksi untuk mode website standalone
+const distPath = path.resolve('dist')
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath))
+  app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api')) return next()
+    res.sendFile(path.join(distPath, 'index.html'))
+  })
+}
 
-export { app }
+ensureBootstrap().then(() => console.log('Bootstrap Finova siap.')).catch((error) => console.error('Bootstrap database tertunda:', error.message))
+const server = app.listen(port, () => console.log(`Finova API berjalan di http://localhost:${port}`))
+server.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    console.warn(`[Finova Server] Port ${port} sudah digunakan oleh instans lain.`)
+  } else {
+    console.error('[Finova Server Error]', err)
+  }
+})
+
+export { app, server }

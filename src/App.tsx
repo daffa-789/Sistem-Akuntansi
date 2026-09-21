@@ -1,10 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { AppShell } from './components/layout/AppShell.js'
 import { OnboardingWalkthrough } from './components/layout/OnboardingWalkthrough.js'
-import { LoginView } from './components/views/LoginView.js'
 import { DashboardView } from './components/views/DashboardView.js'
 import { JournalsView } from './components/views/JournalsView.js'
-import { JournalReportView } from './components/views/JournalReportView.js'
 import { LedgerView } from './components/views/LedgerView.js'
 import { TrialBalanceView } from './components/views/TrialBalanceView.js'
 import { AccountsView } from './components/views/AccountsView.js'
@@ -26,7 +24,7 @@ export interface ToastState {
 }
 
 function Workspace({ user, onLogout }: WorkspaceProps): React.JSX.Element {
-  const [route, setRoute] = useState<string>('journal-report')
+  const [route, setRoute] = useState<string>('journals')
   const [toast, setToast] = useState<ToastState | null>(null)
   const [dark, setDark] = useState<boolean>(() => localStorage.getItem('finova_dark') === '1')
   const [searchOpen, setSearchOpen] = useState<boolean>(false)
@@ -69,10 +67,8 @@ function Workspace({ user, onLogout }: WorkspaceProps): React.JSX.Element {
       pageContent = <DashboardView />
       break
     case 'journals':
-      pageContent = <JournalsView accounts={accounts} notify={notify} />
-      break
     case 'journal-report':
-      pageContent = <JournalReportView accounts={accounts} company={company} notify={notify} />
+      pageContent = <JournalsView accounts={accounts} company={company} notify={notify} />
       break
     case 'ledger':
       pageContent = <LedgerView accounts={accounts} company={company} notify={notify} />
@@ -84,7 +80,7 @@ function Workspace({ user, onLogout }: WorkspaceProps): React.JSX.Element {
       pageContent = <AccountsView accounts={accounts} company={company} notify={notify} />
       break
     default:
-      pageContent = <JournalReportView accounts={accounts} company={company} notify={notify} />
+      pageContent = <JournalsView accounts={accounts} company={company} notify={notify} />
   }
 
   return (
@@ -133,33 +129,44 @@ function Workspace({ user, onLogout }: WorkspaceProps): React.JSX.Element {
   )
 }
 
-export default function App(): React.JSX.Element {
-  const [session, setSession] = useState<{ loading: boolean; user: PublicUser | null }>({
-    loading: true,
-    user: null
-  })
+import { LoginView } from './components/views/LoginView.js'
 
-  useEffect(() => {
+export default function App(): React.JSX.Element {
+  const [user, setUser] = useState<PublicUser | null>(null)
+  const [checkingAuth, setCheckingAuth] = useState<boolean>(true)
+
+  const checkAuth = useCallback(() => {
     request<{ user: PublicUser }>('/auth/me')
-      .then((d) => setSession({ loading: false, user: d.user }))
-      .catch(() => setSession({ loading: false, user: null }))
+      .then((d) => {
+        if (d?.user) setUser(d.user)
+        else setUser(null)
+      })
+      .catch(() => {
+        setUser(null)
+      })
+      .finally(() => {
+        setCheckingAuth(false)
+      })
   }, [])
 
-  async function logout() {
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
+
+  const handleLogout = useCallback(async () => {
     try {
       await request('/auth/logout', { method: 'POST' })
-    } finally {
-      setSession({ loading: false, user: null })
-    }
+    } catch {}
+    setUser(null)
+  }, [])
+
+  if (checkingAuth) {
+    return <PageLoading message="Menyiapkan sistem akuntansi…" />
   }
 
-  if (session.loading) {
-    return <PageLoading message="Menghubungkan ke sesi akuntansi…" />
+  if (!user) {
+    return <LoginView onLogin={(loggedInUser) => setUser(loggedInUser)} />
   }
 
-  return session.user ? (
-    <Workspace user={session.user} onLogout={logout} />
-  ) : (
-    <LoginView onLogin={(u) => setSession({ loading: false, user: u })} />
-  )
+  return <Workspace user={user} onLogout={handleLogout} />
 }

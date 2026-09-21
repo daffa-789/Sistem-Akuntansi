@@ -67,12 +67,13 @@ export interface ExportJournalParams {
   range: { from: string; to: string }
   totals?: { debit: number; credit: number }
   recap?: JournalRecap | null
+  signers?: { maker?: string; checker?: string; approver?: string } | null
 }
 
 /**
  * 1. Export Laporan Jurnal Umum & Rekapitulasi (Multi-Sheet)
  */
-export async function exportJournalToExcel({ company, entries = [], range, totals, recap }: ExportJournalParams): Promise<void> {
+export async function exportJournalToExcel({ company, entries = [], range, totals, recap, signers }: ExportJournalParams): Promise<void> {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Finova Akuntansi Indonesia'
   wb.created = new Date()
@@ -187,6 +188,17 @@ export async function exportJournalToExcel({ company, entries = [], range, total
   const signDateRow = ws.addRow(['', '', '', '', 'Dicetak pada:', new Date().toLocaleDateString('id-ID')])
   signDateRow.font = { size: 9, color: { argb: FINOVA_PALETTE.textMuted } }
 
+  let signersObj = signers
+  if (!signersObj) {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('finova_signers') : null
+      if (raw) signersObj = JSON.parse(raw)
+    } catch {}
+  }
+  const maker = signersObj?.maker || 'Staf Keuangan'
+  const checker = signersObj?.checker || 'Auditor / Penguji'
+  const approver = signersObj?.approver || 'Pimpinan / Direktur'
+
   const signTitleRow = ws.addRow(['', 'Dibuat Oleh,', '', 'Diperiksa Oleh,', '', 'Disetujui Oleh,'])
   signTitleRow.font = { name: 'Arial', size: 10, bold: true }
   signTitleRow.alignment = { horizontal: 'center' }
@@ -195,8 +207,8 @@ export async function exportJournalToExcel({ company, entries = [], range, total
   ws.addRow([])
   ws.addRow([])
 
-  const signNameRow = ws.addRow(['', '( Staf Akuntansi )', '', '( Guru / Dosen )', '', '( Pimpinan )'])
-  signNameRow.font = { name: 'Arial', size: 9, italic: true, color: { argb: FINOVA_PALETTE.textMuted } }
+  const signNameRow = ws.addRow(['', `( ${maker} )`, '', `( ${checker} )`, '', `( ${approver} )`])
+  signNameRow.font = { name: 'Arial', size: 10, bold: true, color: { argb: FINOVA_PALETTE.textDark } }
   signNameRow.alignment = { horizontal: 'center' }
 
   autoFitColumns(ws, { 0: 14, 1: 16, 2: 44, 3: 10, 4: 18, 5: 18 })
