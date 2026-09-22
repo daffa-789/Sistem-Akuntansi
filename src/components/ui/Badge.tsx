@@ -7,11 +7,11 @@ export interface BadgeProps {
 export function Badge({ status }: BadgeProps): React.JSX.Element {
   const v = String(status || '').toUpperCase()
   const c =
-    v === 'POSTED' || v === 'OPEN' || v === 'ADMIN'
+    v === 'POSTED' || v === 'OPEN'
       ? 'green'
       : v === 'DRAFT'
       ? 'amber'
-      : v === 'CLOSED' || v === 'VOID'
+      : v === 'CLOSED' || v === 'REVERSED'
       ? 'slate'
       : 'red'
 
@@ -20,8 +20,7 @@ export function Badge({ status }: BadgeProps): React.JSX.Element {
     DRAFT: 'Draft',
     OPEN: 'Terbuka',
     CLOSED: 'Terkunci',
-    ADMIN: 'Admin',
-    STAFF: 'Staf'
+    REVERSED: 'Dibalik'
   }
 
   const text = labelMap[v] || status || ''

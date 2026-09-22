@@ -1,15 +1,21 @@
 import React, { useMemo, useState } from 'react'
 import {
+  ArrowUpDown,
   BarChart3,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Edit,
+  Eye,
   FileSpreadsheet,
   FileText,
+  History,
   Plus,
   RefreshCw,
   Search,
   Send,
   Trash2,
+  Undo2,
   Upload,
   X
 } from 'lucide-react'
@@ -20,18 +26,46 @@ import { Empty } from '../ui/Empty.js'
 import { ErrorNotice } from '../ui/ErrorNotice.js'
 import { JournalModal } from '../modals/JournalModal.js'
 import { ExcelImportModal } from '../modals/ExcelImportModal.js'
+import { ReverseJournalModal } from '../modals/ReverseJournalModal.js'
+import { AuditLogModal } from '../modals/AuditLogModal.js'
 import { useLoad } from '../../hooks/useLoad.js'
 import { request } from '../../api.js'
-import { apiPath, dateLabel, firstDay, money, today } from '../../utils/formatters.js'
+import { apiPath, dateLabel, firstDay, money, today, SOURCE_LABEL } from '../../utils/formatters.js'
 import { exportJournalToExcel, JournalRecap } from '../../services/excelExporter.js'
 import { Account, Company } from '../../../shared/types.js'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
+export interface RegisterFilters {
+  from: string
+  to: string
+  status: 'ALL' | 'POSTED' | 'DRAFT'
+  account: string
+  search: string
+  sortKey: 'date' | 'voucher' | 'debit' | 'credit'
+  sortDir: 'asc' | 'desc'
+  page: number
+  pageSize: number
+}
+
+export const defaultRegisterFilters = (): RegisterFilters => ({
+  from: firstDay(),
+  to: today(),
+  status: 'ALL',
+  account: '',
+  search: '',
+  sortKey: 'date',
+  sortDir: 'desc',
+  page: 1,
+  pageSize: 50
+})
+
 export interface JournalsViewProps {
   accounts?: Account[]
   company?: Company | null
   notify: (msg: string, isError?: boolean) => void
+  filters: RegisterFilters
+  onFilters: (next: RegisterFilters) => void
 }
 
 export interface ReportLine {
@@ -50,6 +84,8 @@ export interface ReportEntry {
   description: string
   status?: string
   source?: string
+  reversed?: boolean
+  reversal_of_id?: number | null
   lines: ReportLine[]
 }
 
@@ -58,21 +94,26 @@ export interface JournalReportData {
   recap: JournalRecap
 }
 
-export function JournalsView({ accounts = [], company, notify }: JournalsViewProps): React.JSX.Element {
-  const [range, setRange] = useState({ from: firstDay(), to: today() })
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'POSTED' | 'DRAFT'>('ALL')
-  const [accountFilter, setAccountFilter] = useState<string>('')
-  const [searchQuery, setSearchQuery] = useState<string>('')
-  const [showRecap, setShowRecap] = useState<boolean>(false)
+const isPosted = (entry: ReportEntry): boolean => (entry.status || 'POSTED') === 'POSTED'
 
-  const [modal, setModal] = useState<any | null>(null)
+export function JournalsView({ accounts = [], company, notify, filters, onFilters }: JournalsViewProps): React.JSX.Element {
+  const [showRecap, setShowRecap] = useState<boolean>(false)
+  const [modal, setModal] = useState<ReportEntry | 'new' | null>(null)
+  const [reverseTarget, setReverseTarget] = useState<ReportEntry | null>(null)
+  const [auditTarget, setAuditTarget] = useState<number | null>(null)
   const [showImport, setShowImport] = useState<boolean>(false)
   const [exporting, setExporting] = useState<boolean>(false)
+
+  const range = { from: filters.from, to: filters.to }
+
+  function patch(next: Partial<RegisterFilters>): void {
+    onFilters({ ...filters, ...next, page: next.page ?? 1 })
+  }
 
   // Load report data which includes full lines, vouchers, status, and recap
   const { data, loading, error, reload } = useLoad<{ data: JournalReportData | ReportEntry[] }>(
     () => request(apiPath('/reports/journal', range)),
-    [range.from, range.to]
+    [filters.from, filters.to]
   )
 
   const reportData = data?.data
@@ -81,37 +122,27 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
     return Array.isArray(reportData) ? reportData : reportData.entries || []
   }, [reportData])
 
-  const setQuickRange = (type: 'today' | 'this-month' | 'last-month' | 'this-year') => {
+  function setQuickRange(type: 'today' | 'this-month' | 'last-month' | 'this-year'): void {
     const now = new Date()
     const y = now.getFullYear()
     const m = now.getMonth()
-    if (type === 'today') {
-      setRange({ from: today(), to: today() })
-    } else if (type === 'this-month') {
-      setRange({ from: `${y}-${String(m + 1).padStart(2, '0')}-01`, to: today() })
-    } else if (type === 'last-month') {
-      const prevMonthLastDay = new Date(y, m, 0)
-      const prevMonthFirstDay = new Date(y, m - 1, 1)
-      setRange({
-        from: prevMonthFirstDay.toISOString().slice(0, 10),
-        to: prevMonthLastDay.toISOString().slice(0, 10)
-      })
-    } else if (type === 'this-year') {
-      setRange({ from: `${y}-01-01`, to: today() })
-    }
+    if (type === 'today') patch({ from: today(), to: today() })
+    else if (type === 'this-month') patch({ from: `${y}-${String(m + 1).padStart(2, '0')}-01`, to: today() })
+    else if (type === 'last-month')
+      patch({ from: new Date(y, m - 1, 1).toISOString().slice(0, 10), to: new Date(y, m, 0).toISOString().slice(0, 10) })
+    else patch({ from: `${y}-01-01`, to: today() })
   }
 
-  // Filter entries based on search, status, and account
+  // Filter diambil dari state yang diangkat ke App, sehingga berpindah layar tidak
+  // menghapus hasil kerja penyusun jurnal.
   const filteredEntries = useMemo(() => {
     let list = allEntries
-    if (statusFilter !== 'ALL') {
-      list = list.filter((e) => (e.status || 'POSTED') === statusFilter)
+    if (filters.status !== 'ALL') list = list.filter((e) => (e.status || 'POSTED') === filters.status)
+    if (filters.account) {
+      list = list.filter((e) => e.lines.some((l) => String(l.account_id) === String(filters.account)))
     }
-    if (accountFilter) {
-      list = list.filter((e) => e.lines.some((l) => String(l.account_id) === String(accountFilter)))
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
+    if (filters.search.trim()) {
+      const q = filters.search.toLowerCase()
       list = list.filter(
         (e) =>
           e.voucher_no.toLowerCase().includes(q) ||
@@ -125,24 +156,30 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
       )
     }
     return list
-  }, [allEntries, statusFilter, accountFilter, searchQuery])
+  }, [allEntries, filters.status, filters.account, filters.search])
 
-  // Compute live totals
+  // Draft belum masuk buku besar, jadi tidak boleh ikut menghitung total/rekap yang tercetak.
+  const postedEntries = useMemo(() => filteredEntries.filter(isPosted), [filteredEntries])
+  const draftCount = filteredEntries.length - postedEntries.length
+
+  // Akun kas/bank dikenali dari bendera is_cash_account, bukan awalan kode yang rapuh
+  // (kode 1200 adalah Piutang Usaha, bukan kas).
+  const cashCodes = useMemo(() => new Set(accounts.filter((a) => Boolean(a.is_cash_account)).map((a) => a.code)), [accounts])
+
   const totals = useMemo(() => {
     let debit = 0
     let credit = 0
     let cashIn = 0
     let cashOut = 0
 
-    for (const e of filteredEntries) {
+    for (const e of postedEntries) {
       for (const l of e.lines) {
         const d = Number(l.debit || 0)
         const c = Number(l.credit || 0)
         debit += d
         credit += c
 
-        // Detect cash & bank accounts (starting with 1100, 1110)
-        if (l.code.startsWith('110') || l.code.startsWith('111')) {
+        if (cashCodes.has(l.code)) {
           cashIn += d
           cashOut += c
         }
@@ -158,16 +195,15 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
       netCash: cashIn - cashOut,
       isBalanced: Math.abs(debit - credit) < 0.005
     }
-  }, [filteredEntries])
+  }, [postedEntries, filteredEntries.length, cashCodes])
 
-  // Compute live recap for the filtered view
   const liveRecap = useMemo<JournalRecap>(() => {
     const debitMap = new Map<string, { code: string; name: string; amount: number }>()
     const creditMap = new Map<string, { code: string; name: string; amount: number }>()
     let totD = 0
     let totC = 0
 
-    for (const e of filteredEntries) {
+    for (const e of postedEntries) {
       for (const l of e.lines) {
         if (Number(l.debit || 0) > 0) {
           const cur = debitMap.get(l.code) || { code: l.code, name: l.account_name, amount: 0 }
@@ -190,11 +226,48 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
       totalDebit: totD,
       totalCredit: totC
     }
-  }, [filteredEntries])
+  }, [postedEntries])
+
+  const sortedEntries = useMemo(() => {
+    const dir = filters.sortDir === 'asc' ? 1 : -1
+    const sideTotal = (e: ReportEntry, field: 'debit' | 'credit') => e.lines.reduce((s, l) => s + Number(l[field] || 0), 0)
+    return [...filteredEntries].sort((a, b) => {
+      if (filters.sortKey === 'voucher') return a.voucher_no.localeCompare(b.voucher_no) * dir
+      if (filters.sortKey === 'debit') return (sideTotal(a, 'debit') - sideTotal(b, 'debit')) * dir
+      if (filters.sortKey === 'credit') return (sideTotal(a, 'credit') - sideTotal(b, 'credit')) * dir
+      return (a.entry_date.localeCompare(b.entry_date) || a.id - b.id) * dir
+    })
+  }, [filteredEntries, filters.sortKey, filters.sortDir])
+
+  const pageCount = Math.max(1, Math.ceil(sortedEntries.length / filters.pageSize))
+  const currentPage = Math.min(filters.page, pageCount)
+  const pagedEntries = sortedEntries.slice((currentPage - 1) * filters.pageSize, currentPage * filters.pageSize)
+
+  function toggleSort(key: RegisterFilters['sortKey']): void {
+    if (filters.sortKey === key) patch({ sortDir: filters.sortDir === 'asc' ? 'desc' : 'asc' })
+    else patch({ sortKey: key, sortDir: key === 'date' ? 'desc' : 'asc' })
+  }
+
+  function sortHeader(label: string, key: RegisterFilters['sortKey'], style?: React.CSSProperties, className?: string) {
+    const isCurrent = filters.sortKey === key
+    return (
+      <th
+        scope="col"
+        className={className}
+        style={style}
+        aria-sort={isCurrent ? (filters.sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <button type="button" className="th-sort" onClick={() => toggleSort(key)} title={`Urutkan berdasarkan ${label}`}>
+          {label}
+          <ArrowUpDown size={11} aria-hidden="true" style={{ opacity: isCurrent ? 1 : 0.3 }} />
+        </button>
+      </th>
+    )
+  }
 
   async function edit(id: number | string) {
     try {
-      const res = await request<{ entry: any }>(`/journals/${id}`)
+      const res = await request<{ entry: ReportEntry }>(`/journals/${id}`)
       setModal(res.entry)
     } catch (r: any) {
       notify(r.message || 'Gagal mengambil jurnal.', true)
@@ -202,18 +275,12 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
   }
 
   async function deleteJournal(id: number | string, vn: string) {
-    if (
-      !window.confirm(
-        `Hapus transaksi jurnal ${vn}? Tindakan ini akan menghapus data transaksi dan mutasi akun terkait secara permanen.`
-      )
-    ) {
+    if (!window.confirm(`Hapus draft ${vn}? Draft belum masuk buku besar, jadi penghapusan tidak meninggalkan mutasi akun.`)) {
       return
     }
     try {
-      await request(`/journals/${id}`, {
-        method: 'DELETE'
-      })
-      notify(`Jurnal ${vn} berhasil dihapus.`)
+      await request(`/journals/${id}`, { method: 'DELETE' })
+      notify(`Draft ${vn} berhasil dihapus.`)
       reload()
     } catch (r: any) {
       notify(r.message || 'Gagal menghapus jurnal.', true)
@@ -241,7 +308,8 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
 
       await exportJournalToExcel({
         company,
-        entries: filteredEntries as any,
+        // Ekspor selalu berisi seluruh hasil filter, tidak ikut terpotong pagian.
+        entries: sortedEntries as any,
         range,
         totals,
         recap: liveRecap,
@@ -280,7 +348,7 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
       )
 
       const body: any[] = []
-      for (const e of filteredEntries) {
+      for (const e of sortedEntries) {
         for (const [idx, l] of e.lines.entries()) {
           const isFirst = idx === 0
           const isCredit = Number(l.credit || 0) > 0
@@ -408,7 +476,7 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
           <Button variant="secondary" small onClick={handleExportPDF}>
             <FileText size={15} /> Ekspor PDF
           </Button>
-          <Button onClick={() => setModal({})}>
+          <Button onClick={() => setModal('new')}>
             <Plus size={16} /> Catat Transaksi Baru
           </Button>
         </div>
@@ -428,9 +496,14 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
           <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginTop: 4 }}>
             {totals.count} <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Jurnal</span>
           </div>
-          <div style={{ fontSize: 11, color: '#16a34a', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: 11, color: totals.isBalanced ? '#16a34a' : '#e11d48', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
             <CheckCircle2 size={12} /> Status: {totals.isBalanced ? 'Seimbang (Balanced)' : 'Periksa Selisih'}
           </div>
+          {draftCount > 0 && (
+            <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
+              {draftCount} draft tidak dihitung dalam total &amp; rekapitulasi
+            </div>
+          )}
         </div>
 
         <div className="panel" style={{ padding: '12px 16px' }}>
@@ -507,8 +580,8 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
               id="journals-from"
               className="input"
               type="date"
-              value={range.from}
-              onChange={(e) => setRange({ ...range, from: e.target.value })}
+              value={filters.from}
+              onChange={(e) => patch({ from: e.target.value })}
             />
           </div>
 
@@ -518,8 +591,8 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
               id="journals-to"
               className="input"
               type="date"
-              value={range.to}
-              onChange={(e) => setRange({ ...range, to: e.target.value })}
+              value={filters.to}
+              onChange={(e) => patch({ to: e.target.value })}
             />
           </div>
 
@@ -528,8 +601,8 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
             <select
               id="journals-account"
               className="select"
-              value={accountFilter}
-              onChange={(e) => setAccountFilter(e.target.value)}
+              value={filters.account}
+              onChange={(e) => patch({ account: e.target.value })}
             >
               <option value="">Semua Akun</option>
               {accounts.map((a) => (
@@ -545,11 +618,11 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
             <select
               id="journals-status"
               className="select"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
+              value={filters.status}
+              onChange={(e) => patch({ status: e.target.value as RegisterFilters['status'] })}
             >
               <option value="ALL">Semua Status</option>
-              <option value="POSTED">Posted</option>
+              <option value="POSTED">Terposting</option>
               <option value="DRAFT">Draft</option>
             </select>
           </div>
@@ -562,17 +635,18 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
                 className="input"
                 style={{ paddingLeft: 32 }}
                 placeholder="Cari no. bukti, keterangan, akun, memo…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={filters.search}
+                onChange={(e) => patch({ search: e.target.value })}
               />
               <Search
                 size={15}
                 style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
               />
-              {searchQuery && (
+              {filters.search && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery('')}
+                  aria-label="Kosongkan pencarian"
+                  onClick={() => patch({ search: '' })}
                   style={{
                     position: 'absolute',
                     right: 10,
@@ -721,19 +795,19 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
             <table className="table journal-sheet-table" style={{ minWidth: 900 }}>
               <thead>
                 <tr>
-                  <th scope="col" style={{ width: 100 }}>Tanggal</th>
-                  <th scope="col" style={{ width: 140 }}>No. Bukti</th>
+                  {sortHeader('Tanggal', 'date', { width: 100 })}
+                  {sortHeader('No. Bukti', 'voucher', { width: 140 })}
                   <th scope="col">Keterangan Akun &amp; Transaksi</th>
                   <th scope="col" style={{ width: 60, textAlign: 'center' }}>Ref</th>
-                  <th scope="col" className="number" style={{ width: 140 }}>Debit (Rp)</th>
-                  <th scope="col" className="number" style={{ width: 140 }}>Kredit (Rp)</th>
-                  <th scope="col" style={{ width: 90, textAlign: 'center' }}>Status</th>
-                  <th scope="col" style={{ width: 90, textAlign: 'center' }}>Aksi</th>
+                  {sortHeader('Debit (Rp)', 'debit', { width: 140 }, 'number')}
+                  {sortHeader('Kredit (Rp)', 'credit', { width: 140 }, 'number')}
+                  <th scope="col" style={{ width: 100, textAlign: 'center' }}>Status</th>
+                  <th scope="col" style={{ width: 130, textAlign: 'center' }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredEntries.map((e) => {
-                  const isDraft = e.status === 'DRAFT'
+                {pagedEntries.map((e) => {
+                  const isDraft = (e.status || 'POSTED') === 'DRAFT'
                   return (
                     <React.Fragment key={e.id}>
                       {e.lines.map((l, lineIdx) => {
@@ -751,10 +825,17 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
                             {/* Tanggal (tampil di baris pertama transaksi) */}
                             <td>{isFirstLine ? dateLabel(e.entry_date) : ''}</td>
 
-                            {/* No. Bukti */}
+                            {/* No. Bukti + sumber transaksi */}
                             <td>
                               {isFirstLine ? (
-                                <strong style={{ color: '#0f172a' }}>{e.voucher_no}</strong>
+                                <div>
+                                  <strong style={{ color: '#0f172a' }}>{e.voucher_no}</strong>
+                                  {e.source && e.source !== 'MANUAL' && (
+                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                                      {SOURCE_LABEL[e.source] || e.source}
+                                    </div>
+                                  )}
+                                </div>
                               ) : null}
                             </td>
 
@@ -815,19 +896,29 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
 
                             {/* Status */}
                             <td style={{ textAlign: 'center' }}>
-                              {isFirstLine ? <Badge status={e.status || 'POSTED'} /> : null}
+                              {isFirstLine ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                                  <Badge status={e.status || 'POSTED'} />
+                                  {e.reversed && (
+                                    <span title="Sudah dibalik oleh jurnal pembalik">
+                                      <Badge status="REVERSED" />
+                                    </span>
+                                  )}
+                                </div>
+                              ) : null}
                             </td>
 
-                            {/* Aksi: Edit untuk draft, Hapus untuk semua */}
+                            {/* Aksi: draft boleh diubah/dihapus, terposting dikoreksi dengan pembalik */}
                             <td style={{ textAlign: 'center' }}>
                               {isFirstLine ? (
-                                <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                                  {isDraft && (
+                                <div style={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                                  {isDraft ? (
                                     <>
                                       <button
                                         type="button"
                                         className="icon-button"
                                         title={`Ubah draft ${e.voucher_no}`}
+                                        aria-label={`Ubah draft ${e.voucher_no}`}
                                         onClick={() => edit(e.id)}
                                       >
                                         <Edit size={14} />
@@ -836,21 +927,56 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
                                         type="button"
                                         className="icon-button"
                                         style={{ color: '#16a34a' }}
-                                        title={`Posting langsung ${e.voucher_no}`}
+                                        title={`Posting ${e.voucher_no} ke buku besar`}
+                                        aria-label={`Posting ${e.voucher_no}`}
                                         onClick={() => postDraft(e.id, e.voucher_no)}
                                       >
                                         <Send size={14} />
                                       </button>
+                                      <button
+                                        type="button"
+                                        className="icon-button"
+                                        style={{ color: '#e11d48' }}
+                                        title={`Hapus draft ${e.voucher_no}`}
+                                        aria-label={`Hapus draft ${e.voucher_no}`}
+                                        onClick={() => deleteJournal(e.id, e.voucher_no)}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="icon-button"
+                                        title={`Lihat transaksi ${e.voucher_no}`}
+                                        aria-label={`Lihat transaksi ${e.voucher_no}`}
+                                        onClick={() => edit(e.id)}
+                                      >
+                                        <Eye size={14} />
+                                      </button>
+                                      {!e.reversed && (
+                                        <button
+                                          type="button"
+                                          className="icon-button"
+                                          style={{ color: '#b45309' }}
+                                          title={`Buat jurnal pembalik untuk ${e.voucher_no}`}
+                                          aria-label={`Jurnal pembalik ${e.voucher_no}`}
+                                          onClick={() => setReverseTarget(e)}
+                                        >
+                                          <Undo2 size={14} />
+                                        </button>
+                                      )}
                                     </>
                                   )}
                                   <button
                                     type="button"
                                     className="icon-button"
-                                    style={{ color: '#e11d48' }}
-                                    title={`Hapus transaksi ${e.voucher_no}`}
-                                    onClick={() => deleteJournal(e.id, e.voucher_no)}
+                                    title={`Riwayat audit ${e.voucher_no}`}
+                                    aria-label={`Riwayat audit ${e.voucher_no}`}
+                                    onClick={() => setAuditTarget(e.id)}
                                   >
-                                    <Trash2 size={14} />
+                                    <History size={14} />
                                   </button>
                                 </div>
                               ) : null}
@@ -901,6 +1027,47 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
               </Empty>
             )}
           </div>
+
+          {sortedEntries.length > filters.pageSize && (
+            <div className="pager no-print">
+              <label htmlFor="journals-page-size">Tampilkan</label>
+              <select
+                id="journals-page-size"
+                className="select"
+                value={filters.pageSize}
+                onChange={(e) => patch({ pageSize: Number(e.target.value) })}
+              >
+                {[25, 50, 100, 500].map((n) => (
+                  <option key={n} value={n}>
+                    {n} transaksi
+                  </option>
+                ))}
+              </select>
+              <span>
+                Halaman {currentPage} dari {pageCount} &middot; {sortedEntries.length} transaksi
+              </span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <Button
+                  variant="secondary"
+                  small
+                  disabled={currentPage <= 1}
+                  aria-label="Halaman sebelumnya"
+                  onClick={() => patch({ page: currentPage - 1 })}
+                >
+                  <ChevronLeft size={14} /> Sebelumnya
+                </Button>
+                <Button
+                  variant="secondary"
+                  small
+                  disabled={currentPage >= pageCount}
+                  aria-label="Halaman berikutnya"
+                  onClick={() => patch({ page: currentPage + 1 })}
+                >
+                  Berikutnya <ChevronRight size={14} />
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -908,7 +1075,7 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
       {modal !== null && (
         <JournalModal
           accounts={accounts}
-          entry={modal.id ? modal : modal.lines ? modal : null}
+          entry={modal === 'new' ? null : modal}
           onClose={() => setModal(null)}
           onSaved={() => {
             setModal(null)
@@ -917,6 +1084,20 @@ export function JournalsView({ accounts = [], company, notify }: JournalsViewPro
           notify={notify}
         />
       )}
+
+      {reverseTarget && (
+        <ReverseJournalModal
+          entry={reverseTarget}
+          onClose={() => setReverseTarget(null)}
+          onReversed={() => {
+            setReverseTarget(null)
+            reload()
+          }}
+          notify={notify}
+        />
+      )}
+
+      {auditTarget !== null && <AuditLogModal journalId={auditTarget} onClose={() => setAuditTarget(null)} />}
 
       {showImport && (
         <ExcelImportModal

@@ -1,9 +1,20 @@
 node_modules/
 dist/
 dist-server/
+bin/
 release/
-.env
 coverage/
 *.log
-database/*.sqlite*
-database/*.db*
+.env
+
+# Basis data lokal (skema SQLite kini ikut version control di internal/db/schema)
+database/*.sqlite
+database/*.sqlite-shm
+database/*.sqlite-wal
+database/*.db
+database/*.db-shm
+database/*.db-wal
+
+# Hasil build frontend ditanam ke biner; hanya penanda folder yang di-commit
+internal/web/dist/*
+!internal/web/dist/.gitkeep

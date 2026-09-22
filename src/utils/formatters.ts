@@ -31,13 +31,40 @@ export const apiPath = (path: string, values: Record<string, any> = {}): string 
   return params ? `${path}?${params}` : path
 }
 
+// Menampilkan angka dengan titik ribuan dan koma desimal (konvensi Indonesia).
 export const formatNum = (v: number | string | null | undefined): string => {
-  const s = String(v ?? '').replace(/[^0-9]/g, '')
-  if (!s) return ''
-  return s.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  const raw = String(v ?? '').trim()
+  if (!raw) return ''
+  const negative = raw.startsWith('-')
+  const digits = raw.replace(/[^0-9.]/g, '')
+  const [intPart, ...rest] = digits.split('.')
+  const decPart = rest.join('')
+  const grouped = (intPart || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  if (!digits.includes('.')) return `${negative ? '-' : ''}${grouped}`
+  return `${negative ? '-' : ''}${grouped},${decPart}`
 }
 
-export const parseNum = (v: number | string | null | undefined): number => Number(String(v ?? '').replace(/\./g, '')) || 0
+// Mengikuti aturan excelAmount di server: bila koma dan titik sama-sama hadir, yang
+// terakhir adalah pemisah desimal. Kelompok tiga digit dianggap ribuan, jadi '1.500'
+// tetap 1500; konsekuensinya '12.00' terbaca 12 — tulis '12,00' untuk dua desimal.
+export const parseNum = (v: number | string | null | undefined): number => {
+  const raw = String(v ?? '').replace(/[^\d.,-]/g, '')
+  if (!raw) return 0
+  const comma = raw.lastIndexOf(',')
+  const dot = raw.lastIndexOf('.')
+  const decimalIndex = Math.max(comma, dot)
+  if (decimalIndex < 0) return Number(raw) || 0
+  let normalized: string
+  if (comma >= 0 && dot >= 0) {
+    normalized = comma > dot ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,/g, '')
+  } else {
+    const whole = raw.slice(0, decimalIndex).replace(/[.,]/g, '')
+    const fraction = raw.slice(decimalIndex + 1).replace(/[.,]/g, '')
+    normalized = fraction.length > 0 && fraction.length % 3 === 0 ? `${whole}${fraction}` : `${whole}.${fraction}`
+  }
+  const value = Number(normalized)
+  return Number.isFinite(value) ? value : 0
+}
 
 export const GL: Record<AccountGroup, string> = {
   ASSET: 'Aktiva (Aset)',
@@ -45,4 +72,11 @@ export const GL: Record<AccountGroup, string> = {
   EQUITY: 'Ekuitas (Modal)',
   REVENUE: 'Pendapatan',
   EXPENSE: 'Beban'
+}
+
+export const SOURCE_LABEL: Record<string, string> = {
+  MANUAL: 'Manual',
+  IMPORT: 'Impor Excel',
+  CLOSING: 'Jurnal Penutup',
+  REVERSAL: 'Pembalik'
 }

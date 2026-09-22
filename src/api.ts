@@ -13,7 +13,6 @@ export async function request<T = any>(path: string, options: RequestOptions = {
   }
 
   const response = await fetch(`${API}${path}`, {
-    credentials: 'include',
     ...options,
     headers,
     body: isFormData || options.body === undefined ? options.body : JSON.stringify(options.body)
@@ -26,7 +25,7 @@ export async function request<T = any>(path: string, options: RequestOptions = {
 }
 
 export async function download(path: string, filename: string): Promise<void> {
-  const response = await fetch(`${API}${path}`, { credentials: 'include' })
+  const response = await fetch(`${API}${path}`)
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
     throw new Error(payload.message || 'Berkas tidak dapat diunduh.')

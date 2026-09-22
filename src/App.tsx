@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { AppShell } from './components/layout/AppShell.js'
 import { OnboardingWalkthrough } from './components/layout/OnboardingWalkthrough.js'
 import { DashboardView } from './components/views/DashboardView.js'
-import { JournalsView } from './components/views/JournalsView.js'
+import { JournalsView, RegisterFilters, defaultRegisterFilters } from './components/views/JournalsView.js'
 import { LedgerView } from './components/views/LedgerView.js'
 import { TrialBalanceView } from './components/views/TrialBalanceView.js'
 import { AccountsView } from './components/views/AccountsView.js'
@@ -11,24 +11,21 @@ import { PageLoading } from './components/ui/PageLoading.js'
 import { ErrorNotice } from './components/ui/ErrorNotice.js'
 import { useLoad } from './hooks/useLoad.js'
 import { request } from './api.js'
-import { Account, Company, PublicUser } from '../shared/types.js'
-
-export interface WorkspaceProps {
-  user: PublicUser
-  onLogout: () => void
-}
+import { Account, Company } from '../shared/types.js'
 
 export interface ToastState {
   message: string
   error: boolean
 }
 
-function Workspace({ user, onLogout }: WorkspaceProps): React.JSX.Element {
+function Workspace(): React.JSX.Element {
   const [route, setRoute] = useState<string>('journals')
   const [toast, setToast] = useState<ToastState | null>(null)
   const [dark, setDark] = useState<boolean>(() => localStorage.getItem('finova_dark') === '1')
   const [searchOpen, setSearchOpen] = useState<boolean>(false)
   const [showOnboard, setShowOnboard] = useState<boolean>(() => !localStorage.getItem('finova_onboarded'))
+  // Filter register dijaga di sini agar berpindah layar tidak menghapus hasil kerja.
+  const [registerFilters, setRegisterFilters] = useState<RegisterFilters>(() => defaultRegisterFilters())
 
   const companyState = useLoad<{ company: Company }>(() => request('/company'), [])
   const accountsState = useLoad<{ accounts: Account[] }>(() => request('/accounts'), [])
@@ -68,7 +65,15 @@ function Workspace({ user, onLogout }: WorkspaceProps): React.JSX.Element {
       break
     case 'journals':
     case 'journal-report':
-      pageContent = <JournalsView accounts={accounts} company={company} notify={notify} />
+      pageContent = (
+        <JournalsView
+          accounts={accounts}
+          company={company}
+          notify={notify}
+          filters={registerFilters}
+          onFilters={setRegisterFilters}
+        />
+      )
       break
     case 'ledger':
       pageContent = <LedgerView accounts={accounts} company={company} notify={notify} />
@@ -80,16 +85,22 @@ function Workspace({ user, onLogout }: WorkspaceProps): React.JSX.Element {
       pageContent = <AccountsView accounts={accounts} company={company} notify={notify} />
       break
     default:
-      pageContent = <JournalsView accounts={accounts} company={company} notify={notify} />
-  }
+      pageContent = (
+        <JournalsView
+          accounts={accounts}
+          company={company}
+          notify={notify}
+          filters={registerFilters}
+          onFilters={setRegisterFilters}
+        />
+      )
+    }
 
   return (
     <AppShell
-      user={user}
       company={company}
       route={route}
       setRoute={setRoute}
-      onLogout={onLogout}
       dark={dark}
       setDark={setDark}
       onSearch={() => setSearchOpen(true)}
@@ -129,44 +140,6 @@ function Workspace({ user, onLogout }: WorkspaceProps): React.JSX.Element {
   )
 }
 
-import { LoginView } from './components/views/LoginView.js'
-
 export default function App(): React.JSX.Element {
-  const [user, setUser] = useState<PublicUser | null>(null)
-  const [checkingAuth, setCheckingAuth] = useState<boolean>(true)
-
-  const checkAuth = useCallback(() => {
-    request<{ user: PublicUser }>('/auth/me')
-      .then((d) => {
-        if (d?.user) setUser(d.user)
-        else setUser(null)
-      })
-      .catch(() => {
-        setUser(null)
-      })
-      .finally(() => {
-        setCheckingAuth(false)
-      })
-  }, [])
-
-  useEffect(() => {
-    checkAuth()
-  }, [checkAuth])
-
-  const handleLogout = useCallback(async () => {
-    try {
-      await request('/auth/logout', { method: 'POST' })
-    } catch {}
-    setUser(null)
-  }, [])
-
-  if (checkingAuth) {
-    return <PageLoading message="Menyiapkan sistem akuntansi…" />
-  }
-
-  if (!user) {
-    return <LoginView onLogin={(loggedInUser) => setUser(loggedInUser)} />
-  }
-
-  return <Workspace user={user} onLogout={handleLogout} />
+  return <Workspace />
 }

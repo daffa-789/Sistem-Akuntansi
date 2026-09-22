@@ -1,9 +1,9 @@
 import React, { ReactNode } from 'react'
 import {
   BookOpen, FileBarChart, Landmark, LayoutDashboard,
-  Moon, PenLine, ReceiptText, Search, Sun, LogOut, LucideIcon
+  Moon, PenLine, ReceiptText, Search, Sun, LucideIcon
 } from 'lucide-react'
-import { Company, PublicUser } from '../../../shared/types.js'
+import { Company } from '../../../shared/types.js'
 
 export type NavRoute = 'dashboard' | 'journals' | 'ledger' | 'trial-balance' | 'accounts'
 
@@ -16,11 +16,9 @@ export const NAV_ITEMS: [NavRoute, string, LucideIcon][] = [
 ]
 
 export interface AppShellProps {
-  user: PublicUser
   company?: Company | null
   route: string
   setRoute: (route: string) => void
-  onLogout: () => void
   dark: boolean
   setDark: (dark: boolean) => void
   onSearch: () => void
@@ -28,11 +26,9 @@ export interface AppShellProps {
 }
 
 export function AppShell({
-  user,
   company,
   route,
   setRoute,
-  onLogout,
   dark,
   setDark,
   onSearch,
@@ -161,7 +157,7 @@ export function AppShell({
             Sistem Akuntansi
             <strong>{currentItem[1]}</strong>
           </div>
-          <div className="profile-chip">
+          <div className="topbar-actions">
             <button
               type="button"
               className="icon-button"
@@ -179,25 +175,6 @@ export function AppShell({
               onClick={() => setDark(!dark)}
             >
               {dark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-            </button>
-            <div className="avatar" aria-hidden="true">
-              {user.name.slice(0, 1).toUpperCase()}
-            </div>
-            <div>
-              <div className="profile-name">{user.name}</div>
-              <div className="profile-role">
-                {user.role === 'ADMIN' ? 'Administrator' : 'Staf Keuangan'}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="icon-button"
-              title="Keluar / Logout"
-              aria-label="Keluar dari akun"
-              onClick={onLogout}
-              style={{ marginLeft: 4 }}
-            >
-              <LogOut size={16} aria-hidden="true" />
             </button>
           </div>
         </header>

@@ -4,7 +4,7 @@ export type AccountGroup = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPEN
 export type NormalBalance = 'DEBIT' | 'CREDIT'
 export type CashFlowCategory = 'OPERATING' | 'INVESTING' | 'FINANCING' | 'NON_CASH'
 export type JournalStatus = 'DRAFT' | 'POSTED' | 'REVERSED'
-export type JournalSource = 'MANUAL' | 'EXCEL_IMPORT' | 'SYSTEM' | 'CLOSING'
+export type JournalSource = 'MANUAL' | 'IMPORT' | 'CLOSING' | 'REVERSAL'
 export type PeriodStatus = 'OPEN' | 'CLOSED'
 export type UserRole = 'ADMIN' | 'STAFF' | 'ACCOUNTANT' | 'VIEWER' | string
 
@@ -25,28 +25,13 @@ export interface User {
   company_id: number
   name: string
   email: string
+  // Kolom tidak dipakai: aplikasi berjalan tanpa login. Baris ini tetap ada karena
+  // journal_entries.created_by NOT NULL REFERENCES users(id).
   password_hash?: string
   role: UserRole
   is_active: number | boolean
   created_at?: string
   updated_at?: string
-}
-
-export interface PublicUser {
-  id: number
-  name: string
-  email: string
-  role: string
-  isActive: boolean
-}
-
-export interface AuthClaims {
-  sub: number
-  companyId: number
-  role: string
-  name: string
-  iat?: number
-  exp?: number
 }
 
 export interface Account {

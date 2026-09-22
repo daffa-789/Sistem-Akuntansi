@@ -1,29 +1,30 @@
 # Finova — Sistem Akuntansi & Pembukuan Web Terpadu Indonesia
 
-Finova adalah aplikasi sistem informasi akuntansi berbasis web (**Full-Stack TypeScript & React**) yang dirancang khusus agar rapi, interaktif, dan mudah digunakan—baik untuk operasional pembukuan UMKM/bisnis maupun untuk siswa dan mahasiswa akuntansi yang sedang mempelajari siklus akuntansi lengkap (*Jurnal Umum -> Buku Besar -> Neraca Saldo -> Laporan Keuangan*).
+Finova adalah aplikasi sistem informasi akuntansi berbasis web (**backend Go + frontend React/TypeScript**) yang dirancang khusus agar rapi, interaktif, dan mudah digunakan—baik untuk operasional pembukuan UMKM/bisnis maupun untuk siswa dan mahasiswa akuntansi yang sedang mempelajari siklus akuntansi lengkap (*Jurnal Umum -> Buku Besar -> Neraca Saldo -> Laporan Keuangan*).
 
-Aplikasi ini menggunakan **database lokal SQLite mandiri (`better-sqlite3`)**, sehingga **tidak membutuhkan server MySQL, XAMPP, atau phpMyAdmin**. Seluruh data tersimpan otomatis di dalam file lokal `database/finova.sqlite` dan siap dipakai secara instan begitu aplikasi dijalankan.
+Server API ditulis ulang dalam **Go murni** (`net/http` + driver SQLite tanpa CGO) dan frontend React hasil build **ditanam ke dalam biner** lewat `go:embed`. Hasilnya: **satu berkas `finova.exe`** yang menjalankan seluruh aplikasi — tanpa Node.js saat berjalan, tanpa Electron, dan tanpa basis data MySQL/XAMPP. Data tersimpan di berkas lokal `database/finova.sqlite` dan siap dipakai secara instan begitu aplikasi dijalankan.
 
 ---
 
 ## 🛠️ Tech Stack & Arsitektur
 
-- **Frontend**: [React 18](https://react.dev/) + **TSX** (Strict TypeScript)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + Custom Glassmorphism Theme (Light & Dark Mode)
-- **Build Tool**: [Vite](https://vitejs.dev/) + `@vitejs/plugin-react`
-- **Backend Runtime**: [Node.js](https://nodejs.org/) + [Express](https://expressjs.com/) via [tsx](https://github.com/privatenumber/tsx) (Zero-build TypeScript execution)
-- **Database**: SQLite 3 via `better-sqlite3` dengan mode Write-Ahead Logging (WAL) berkinerja tinggi
-- **Shared Types**: `shared/types.ts` sebagai *single source of truth* kontrak data (Frontend & Backend)
-- **Testing**: [Vitest](https://vitest.dev/) untuk pengujian unit logika akuntansi dan database layer
-- **Export Engine**: ExcelJS (`.xlsx`) & jsPDF / html2canvas (`.pdf`)
+- **Backend**: [Go](https://go.dev/) (`net/http` + `http.ServeMux` berpola, Go 1.22+), tanpa framework web pihak ketiga
+- **Database**: SQLite 3 lewat driver murni Go [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite) (tanpa CGO/gcc), mode Write-Ahead Logging (WAL)
+- **Skema & seed**: `internal/db/schema/schema.sqlite.sql` ditanam ke biner (`go:embed`) dan diterapkan otomatis saat pertama berjalan
+- **Excel**: [`excelize`](https://github.com/xuri/excelize) untuk templat impor dan pembacaan berkas unggahan di sisi server
+- **Frontend**: [React 18](https://react.dev/) + **TSX** (Strict TypeScript), [Tailwind CSS](https://tailwindcss.com/) dengan tema Glassmorphism (Light & Dark Mode), dibangun oleh [Vite](https://vitejs.dev/)
+- **Aset frontend**: hasil build Vite (`internal/web/dist`) di-embed ke biner Go, dilayani dengan fallback SPA untuk rute dalam
+- **Shared Types**: `shared/types.ts` sebagai kontrak data frontend; kunci JSON backend mengikuti nama kolom SQLite
+- **Testing**: `go test` (unit akuntansi, lapisan database, integrasi HTTP penuh) + [Vitest](https://vitest.dev/) untuk komponen & utilitas frontend
+- **Export Engine (sisi klien)**: ExcelJS (`.xlsx`) & jsPDF / html2canvas (`.pdf`)
 
 ---
 
 ## ✨ Kemampuan & Fitur Utama
 
 ### 1. Database Lokal Mandiri (Zero-Setup)
-- Berbasis npm package `better-sqlite3` dengan mode Write-Ahead Logging (WAL) yang super cepat dan aman.
-- **Auto-bootstrap**: Otomatis membuat tabel, Bagan Akun Indonesia lengkap (36 akun standar), periode akuntansi, akun administrator, template transaksi, dan data jurnal awal saat pertama kali dijalankan.
+- Berbasis SQLite lewat driver murni Go `modernc.org/sqlite` dengan mode Write-Ahead Logging (WAL) yang cepat dan aman — tidak perlu C/C++ toolchain.
+- **Auto-bootstrap**: saat biner pertama kali dijalankan, skema ditanam dan aplikasi otomatis membuat tabel, Bagan Akun Indonesia lengkap (36 akun standar), periode akuntansi tahun berjalan, baris operator pencatat transaksi, dan templat transaksi.
 - Tidak perlu install XAMPP, menyalakan Apache/MySQL, atau membuat database di phpMyAdmin.
 
 ### 2. Standar Laporan Jurnal Umum (General Journal)
@@ -55,7 +56,7 @@ Aplikasi ini menggunakan **database lokal SQLite mandiri (`better-sqlite3`)**, s
 - **Neraca Saldo (Trial Balance)**: Memverifikasi keseimbangan debit dan kredit seluruh akun.
 - **Bagan Akun (Chart of Accounts)**: Eksplorasi akun berdasarkan kelompok (Aktiva, Liabilitas, Ekuitas, Pendapatan, Beban) dan saldo normalnya.
 - **Dashboard Keuangan**: Grafik kinerja pendapatan vs beban serta indikator kas & bank real-time.
-- **Otentikasi & Keamanan**: Dukungan login multi-peran (Admin & Staf Keuangan) dengan cookie aman dan sesi JWT.
+- **Operator tunggal**: aplikasi lokal tanpa login; setiap transaksi tetap tercatat atas nama operator dan meninggalkan jejak audit lengkap di `audit_logs`.
 
 ---
 
@@ -63,39 +64,44 @@ Aplikasi ini menggunakan **database lokal SQLite mandiri (`better-sqlite3`)**, s
 
 ```text
 Sistem-Akuntansi/
-├── database/               # Schema SQL dan file database SQLite lokal
-│   ├── finova.sqlite       # Database lokal aktif (WAL mode)
-│   └── schema.sqlite.sql   # DDL skema database relasional
-├── scripts/                # Otomasi TypeScript (dijalankan via tsx)
-│   ├── dev.ts              # Launcher simultan frontend Vite + backend API
-│   ├── init-db.ts          # Skrip inisialisasi & seeder database lokal
-│   └── clean-database.ts   # Skrip pembersihan data transaksi / reset
-├── server/                 # Backend Node.js + Express (TypeScript)
-│   ├── accounting.ts       # Logika kalkulasi akuntansi & validasi ALERE
-│   ├── accounting.test.ts  # Unit test logika akuntansi
-│   ├── db.ts               # SQLite connection pool & transaction manager
-│   ├── db.test.ts          # Unit test SQLite layer
-│   └── server.ts           # REST API endpoints & otentikasi JWT
-├── shared/                 # Shared domain types (Frontend & Backend)
-│   └── types.ts            # Tipe Akun, Jurnal, Laporan, User, Periode
+├── cmd/
+│   └── finova/main.go      # Satu-satunya biner: serve (default), db:init, db:clean, version
+├── internal/               # Paket Go (tidak diekspor ke luar modul)
+│   ├── config/             # Pembaca berkas .env + variabel lingkungan
+│   ├── db/                 # Lapisan SQLite: pragma, Row map, transaksi, pembersihan data
+│   │   └── schema/         # schema.sqlite.sql (ditanam ke biner lewat go:embed)
+│   ├── domain/             # Aturan pembukuan: validasi jurnal, neraca saldo, laba rugi,
+│   │                       # neraca, perubahan modal, arus kas, jurnal penutup
+│   ├── httpapi/            # Rute /api/*, CORS, pemetaan galat, layanan jurnal/periode/impor/laporan
+│   ├── web/                # go:embed hasil build frontend + penyimpan berkas SPA (fallback index.html)
+│   └── xlsx/               # Pembuat templat & parser berkas Excel impor (excelize)
+├── scripts/                # Alat bantu npm
+│   ├── dev.ts              # Menjalankan Go API + Vite HMR bersamaan
+│   ├── build-go.mjs        # `go build` dengan nama biner per sistem operasi
+│   ├── start.mjs           # Menjalankan biner produksi (build bila belum ada)
+│   └── keep-dist.mjs       # Memulihkan penanda internal/web/dist/.gitkeep setelah build
+├── shared/
+│   └── types.ts            # Tipe domain frontend (cermin kunci JSON dari Go)
 ├── src/                    # Frontend React 18 + TSX
 │   ├── components/
 │   │   ├── layout/         # AppShell, OnboardingWalkthrough
-│   │   ├── modals/         # JournalModal, TemplateModal, AuditLog, dsb.
-│   │   ├── ui/             # Reusable UI (Button, Modal, Badge, Empty, dsb.)
-│   │   └── views/          # Dashboard, Accounts, Journals, Ledger, TrialBalance, Login
+│   │   ├── modals/         # JournalModal, ReverseJournalModal, TemplateModal, AuditLog, dsb.
+│   │   ├── ui/             # Reusable UI (Button, Modal, Badge, AccountPicker, AmountInput, ...)
+│   │   └── views/          # Dashboard, Accounts, Journals, Ledger, TrialBalance
 │   ├── hooks/              # Custom hooks (useLoad)
-│   ├── services/           # excelExporter (ExcelJS)
+│   ├── services/           # excelExporter (ExcelJS sisi klien)
 │   ├── utils/              # formatters & validators
-│   ├── api.ts              # Strongly-typed HTTP client
+│   ├── api.ts              # HTTP client bertipe
 │   ├── App.tsx             # Root layout & view switcher
-│   ├── main.tsx            # React DOM mounting
-│   └── vite-env.d.ts       # Ambient Vite types
+│   └── main.tsx            # React DOM mounting
+├── database/               # Berkas data lokal (finova.sqlite, WAL) — di-gitignore
+├── bin/                    # Biner hasil `npm run build` — di-gitignore
 ├── index.html              # HTML entry point (mengarah ke /src/main.tsx)
+├── go.mod / go.sum         # Modul Go `finova` dan kunci dependensi
 ├── tsconfig.json           # Konfigurasi TypeScript compiler (strict: true)
-├── vite.config.ts          # Konfigurasi Vite & path alias (@/* & @shared/*)
+├── vite.config.ts          # Build klien ke internal/web/dist + proxy /api ke Go
 ├── tailwind.config.js      # Konfigurasi Tailwind CSS
-└── package.json            # Script & dependensi proyek
+└── package.json            # Skrip npm & dependensi frontend
 ```
 
 ---
@@ -103,71 +109,96 @@ Sistem-Akuntansi/
 ## 🌐 Cara Menjalankan Aplikasi Web
 
 ### Prasyarat
-- [Node.js](https://nodejs.org/) versi 18 atau lebih baru.
-- npm (bawaan dari Node.js).
+- **Go 1.22 atau lebih baru** (wajib; modul memakai `http.ServeMux` berpola). Unduh di [go.dev/dl](https://go.dev/dl/), cek dengan `go version`. Tidak perlu GCC/CGO karena driver SQLite murni Go.
+- **Node.js 18+ dan npm** — hanya untuk membangun frontend React dan menjalankan perkakas pengembangan. Biner hasil build berjalan tanpa Node sama sekali.
 
 ### 🚀 1. Mode Pengembangan (Development)
-Untuk menjalankan frontend (Vite) dan backend (Express API) secara bersamaan:
+Frontend Vite (HMR) + backend Go berjalan bersamaan:
 
 ```bash
-# 1. Pasang dependensi
-npm install
-
-# 2. Jalankan server pengembangan
+npm install          # dependensi perkakas frontend
+go mod download      # dependensi Go (sekali per mesin/ubah modul)
 npm run dev
 ```
 
-Aplikasi akan otomatis berjalan di:
-- **Frontend**: [http://localhost:3000](http://localhost:3000)
-- **Backend API**: [http://localhost:5000](http://localhost:5000)
+- **Frontend**: [http://localhost:3000](http://localhost:3000) — proxy `/api` otomatis ke port Go
+- **Backend API (Go)**: port dari `PORT` di `.env` (bawaan proyek ini `5199`, lihat catatan port di bawah)
 
-Buka peramban (*web browser*) Anda ke **`http://localhost:3000`**.
-
----
-
-### 📦 2. Mode Produksi (Production Build & Run)
-Untuk mengompilasi bundel statis dan menjalankan server produksi mandiri:
+### 📦 2. Mode Produksi (Build & Jalankan Satu Biner)
 
 ```bash
-# 1. Kompilasi frontend dan backend
-npm run build
-
-# 2. Jalankan server produksi
-npm start
+npm run build        # vite build -> internal/web/dist, lalu go build -> bin/finova.exe
+npm start            # jalankan biner produksi (frontend sudah tertanam di dalamnya)
 ```
 
-Aplikasi siap diakses di [http://localhost:5000](http://localhost:5000).
+Aplikasi siap diakses di alamat yang dicetak konsol, mis. [http://localhost:5199](http://localhost:5199).
+
+Karena seluruh aset ikut tertanam, berkas `bin/finova.exe` dapat disalin ke komputer lain dan
+langsung dijalankan — tanpa instalasi Node, tanpa Electron, tanpa MySQL:
+
+```bash
+bin\finova.exe                      # jalankan server (perintah default: serve)
+bin\finova.exe -port 8080           # ganti port
+bin\finova.exe -db D:\data\uji.db   # pakai basis data lain (mis. untuk uji coba)
+bin\finova.exe db:init              # terapkan skema lalu keluar
+bin\finova.exe db:clean              # kosongkan transaksi, pertahankan bagan akun
+bin\finova.exe version              # info versi & arsitektur biner
+```
+
+> Port `5000` sering dipakai aplikasi lokal lain (mis. perkakas XAMPP/MySQL). Berkas `.env`
+> proyek ini sudah memakai `PORT=5199`. Untuk mengganti sementara:
+> `PORT=5199 npm run dev` — proxy Vite ikut menyesuaikan karena membaca nilai `PORT` yang sama.
 
 ---
 
-## 🔑 Akun Masuk Bawaan (Default Login)
+## 👤-operator Tunggal (Tanpa Login)
 
-Saat pertama kali membuka website, gunakan akun administrator bawaan berikut:
-- **Email**: `admin@finova.local`
-- **Kata Sandi**: `Admin123!`
+Aplikasi berjalan sebagai aplikasi lokal satu operator: **tidak ada halaman login, tanpa kata sandi, tanpa sesi JWT**. Website langsung terbuka ke Jurnal Umum.
+
+Satu baris tetap disimpan di tabel `users` sebagai pencatat transaksi karena `journal_entries.created_by` dan `import_batches.uploaded_by` adalah foreign key `NOT NULL`. Nama pencatat itu dapat diganti lewat variabel `OPERATOR_NAME` di berkas `.env` dan akan muncul pada kolom pencatat jurnal serta Riwayat Audit.
 
 ---
 
-## 💻 Daftar Perintah npm
+## 💻 Daftar Perintah
 
 | Perintah | Deskripsi |
 | --- | --- |
-| `npm run dev` | Menjalankan Frontend Vite (`:3000`) & Backend API (`:5000`) simultan |
-| `npm run dev:frontend` | Menjalankan hanya server frontend Vite |
-| `npm run dev:server` | Menjalankan backend Express dengan auto-reload via `tsx watch` |
-| `npm run build` | Mengompilasi bundle produksi frontend (`dist/`) dan server (`dist-server/`) |
-| `npm start` | Menjalankan aplikasi web produksi dari bundle server |
-| `npm run preview` | Melakukan pratinjau hasil build client Vite |
-| `npm run typecheck` | Menjalankan pemeriksaan tipe TypeScript seluruh proyek (`tsc --noEmit`) |
-| `npm test` | Menjalankan seluruh unit test (Vitest) untuk logika akuntansi & database |
-| `npm run db:init` | Menginisialisasi ulang database SQLite lokal dengan data standar |
-| `npm run db:clean` | Mengosongkan data transaksi dan mereset ke saldo awal |
+| `npm run dev` | Go API + Frontend Vite (`:3000`) simultan |
+| `npm run dev:frontend` | Hanya server pengembangan Vite (HMR) |
+| `npm run dev:server` | Hanya backend Go (`go run ./cmd/finova`) |
+| `npm run build:client` | Build frontend ke `internal/web/dist` (bahan `go:embed`) |
+| `npm run build:server` | `go build` menjadi `bin/finova.exe` |
+| `npm run build` | Keduanya: hasil akhirnya satu biner mandiri |
+| `npm start` | Jalankan biner produksi (dibangun otomatis bila belum ada) |
+| `npm run test:go` | `go test ./...` — unit akuntansi, lapisan DB, integrasi HTTP |
+| `npm run test:ui` | `vitest run` — tes komponen/utilitas frontend |
+| `npm test` | Seluruh tes Go + frontend |
+| `npm run vet` | `go vet ./...` |
+| `npm run typecheck` | Pemeriksaan tipe TypeScript (`tsc --noEmit`) |
+| `npm run db:init` | Terapkan skema + seed, lalu keluar |
+| `npm run db:clean` | Kosongkan tabel transaksi (bagan akun & periode dipertahankan) |
+| `go run ./cmd/finova -db ./tmp/uji.sqlite` | Jalankan pada basis data terpisah untuk uji coba |
+
+> Port `5000` kadang dipakai aplikasi lokal lain. Jika API Finova tidak merespons, jalankan dengan port cadangan:
+> `PORT=5199 npm run dev` (proxy Vite ikut menyesuaikan karena membaca `PORT`).
 
 ---
 
-## ⌨️ Pintasan Keyboard Global
+## ⌨️ Pintasan Keyboard
 
 | Shortcut | Fungsi |
 | --- | --- |
-| `Ctrl+K` | Pencarian global akun dan menu cepat |
-| `Esc` | Menutup jendela dialog / modal aktif |
+| `Ctrl+K` | Pencarian akun cepat |
+| `Esc` | Menutup jendela dialog / modal paling atas |
+
+### Di dalam form "Catat Transaksi"
+
+| Shortcut | Fungsi |
+| --- | --- |
+| `Enter` | Simpan & posting (pada field), atau memilih akun yang disorot (saat mengetik kode akun) |
+| `Ctrl + Enter` | Simpan & posting dari kolom mana pun |
+| `Ctrl + S` | Simpan sebagai draft |
+| `Enter` / `Shift+Enter` di grid | Turun / naik satu baris jurnal; baris baru dibuat otomatis di baris terakhir |
+| `Ctrl + D` | Duplikasi baris jurnal yang sedang aktif |
+| `Shift + D` / `Shift + K` | Pindahkan nominal ke sisi Debit / Kredit |
+| `↑` / `↓` | Nominal ±1; `Shift` ±1.000; `Alt` ±100.000 |
