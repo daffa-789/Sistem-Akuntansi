@@ -2,21 +2,28 @@ FINOVA - CATATAN PENGGUNAAN (versi terpasang)
 ==============================================
 
 Menjalankan aplikasi
-  Klik pintasan "Finova" (Menu Mulai atau Desktop). Aplikasi berjalan di komputer
-  Anda sendiri dan jendela peramban terbuka otomatis pada alamat:
+  Klik pintasan "Finova" (Menu Mulai atau Desktop). Aplikasi terbuka sebagai
+  JENDELA SENDIRI - bukan tab peramban. Finova tidak memakai port tetap: setiap
+  kali jalan ia meminta port bebas kepada Windows, jadi tidak akan bertabrakan
+  dengan aplikasi lain di komputer Anda.
 
-      http://localhost:5199
-
-  Bila port itu sedang dipakai, jalankan dari baris perintah dengan port lain:
+  Bila Anda memang memerlukan port tertentu (mis. untuk dibookmark):
 
       "%LOCALAPPDATA%\Programs\Finova\finova.exe" -app -port 5201
 
 Berhenti / mulai ulang
-  Tutup jendela konsol, atau jalankan:
+  Tutup jendela Finova - prosesnya ikut berhenti dan portnya dilepas.
+
+  Klik pintasan lagi saat aplikasi masih terbuka: jendela yang sudah ada yang
+  dimunculkan ke depan, bukan server kedua.
+
+  Hanya bila jendela membeku dan tidak bisa ditutup:
 
       taskkill /IM finova.exe /F
 
-  Klik pintasan lagi membuka peramban baru tanpa menyalakan server kedua.
+Jalur peramban (opsional, untuk pemeriksaan)
+      finova.exe -browser         tampilkan di peramban default, bukan di jendela
+      finova.exe -no-browser      jalankan tanpa membuka apa pun (hanya server)
 
 Letak data
   Seluruh pembukuan disimpan pada satu berkas SQLite:
@@ -24,6 +31,7 @@ Letak data
       %APPDATA%\Finova\finova.sqlite        (mis. C:\Users\NamaAnda\AppData\Roaming\Finova)
       %APPDATA%\Finova\finova.sqlite-wal    (catatan write-ahead, biarkan bersama)
       %APPDATA%\Finova\finova.log           (log saat berjalan tanpa konsol)
+      %APPDATA%\Finova\webview2\            (profil tampilan; boleh dihapus bila bermasalah)
 
   Salin berkas .sqlite tersebut untuk cadangan. Menyalinnya ke komputer lain yang
   sudah terpasang Finova akan memindahkan seluruh jurnal, bagan akun, dan jejak audit.
@@ -44,7 +52,7 @@ Mengubah nama perusahaan atau operator
 
       COMPANY_NAME=CV Maju Bersama
       OPERATOR_NAME=Budi
-      PORT=5201
+      PORT=5201        (kosongkan saja bila tidak perlu port tertentu)
 
   Berkas .env di folder kerja aplikasi juga dibaca; nilai dari baris perintah
   (-port, -db) lebih utama daripada isi .env.

@@ -23,8 +23,10 @@ func HideConsole() error {
 		// Sudah tanpa konsol (mis. dibangun dengan -H windowsgui).
 		return nil
 	}
-	ret, _, err := procShowWindow.Call(hwnd, uintptr(swHide))
-	if ret == 0 {
+	// ShowWindow mengembalikan 0 bila jendela memang sudah tersembunyi — bukan
+	// kegagalan. Yang layak dilaporkan hanyalah errno aslinya.
+	_, _, err := procShowWindow.Call(hwnd, uintptr(swHide))
+	if errno, ok := err.(syscall.Errno); ok && errno != 0 {
 		return err
 	}
 	return nil

@@ -7,6 +7,12 @@ import path from 'node:path'
 // pola //go:embed pada package web.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  // Port API Go dipilih scripts/dev.mjs setelah backend benar-benar bind; tanpa
+  // nilai itu tidak ada proxy yang masuk akal, jadi lebih baik diberi tahu.
+  const apiPort = Number(env.VITE_API_PORT || env.PORT || 0)
+  if (!apiPort) {
+    console.log('[vite] VITE_API_PORT kosong: /api tidak diproksikan. Jalankan `npm run dev`.')
+  }
   return {
     plugins: [react()],
     resolve: {
@@ -16,10 +22,13 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
-      port: Number(env.VITE_PORT || 3000),
+      // 0 = sistem yang memilih port, jadi `npm run dev` tidak lagi merebut 3000
+      // yang merupakan port default semua proyek Vite lain di mesin ini.
+      port: Number(env.VITE_PORT || 0),
       strictPort: false,
-      // Backend API kini berjalan pada Go (go run ./cmd/finova) di port yang sama.
-      proxy: { '/api': { target: `http://localhost:${env.PORT || 5000}`, changeOrigin: true } }
+      proxy: apiPort
+        ? { '/api': { target: `http://127.0.0.1:${apiPort}`, changeOrigin: true } }
+        : undefined
     },
     build: {
       outDir: 'internal/web/dist',

@@ -1,11 +1,17 @@
-// Command finova adalah satu-satunya biner aplikasi akuntansi Finova:
-// server API Go + penyimpanan aset frontend React yang ditanam di dalamnya.
-// Tidak ada Electron, tidak ada Node.js saat berjalan.
+// Command finova adalah satu-satunya biner aplikasi akuntansi Finova: server API
+// Go + penyimpanan aset frontend React yang ditanam di dalamnya. Tidak ada
+// Electron, tidak ada Node.js saat berjalan.
 //
-//	finova                     jalankan server (mode pengembangan, konsol terlihat)
-//	finova -app                mode aplikasi desktop: tanpa jendela konsol, log ke
-//	                           berkas, dan peramban terbuka otomatis (dipakai pintasan)
+//	finova                 mode pengembangan: server saja, alamatnya dicetak di konsol
+//	finova -app            aplikasi desktop: satu jendela WebView2, tanpa konsol,
+//	                       log ke berkas (dipakai pintasan hasil installer)
+//	finova -browser        server + buka di peramban (jalur pem-debug-an)
+//	finova -no-browser     server saja, tanpa membuka jendela/peramban (alur uji)
 //	finova serve|db:init|db:clean|version
+//
+// Server selalu bind ke 127.0.0.1 dan secara bawaan memintakan port ke sistem,
+// sehingga Finova bisa berjalan berdampingan dengan proyek lain di mesin yang
+// sama tanpa saling merebut port.
 //
 // Nomor versi disuntik saat build lewat -ldflags "-X main.version=1.0.0".
 package main
@@ -32,6 +38,18 @@ import (
 // version ditimpa saat build (lihat scripts/build-go.mjs).
 var version = "dev"
 
+// windowTitle judul jendela desktop. Nama perusahaan tampil di dalam aplikasi,
+// judul jendela cukup singkat agar tidak terpotong di taskbar.
+const windowTitle = "Finova — Sistem Akuntansi"
+
+// launch memilih bagaimana aplikasi muncul setelah server siap.
+type launch struct {
+	window   bool
+	browser  bool
+	url      string
+	devtools bool
+}
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		log.Fatalf("Finova: %v", err)
@@ -48,12 +66,14 @@ func run(args []string) error {
 	set := flag.NewFlagSet(command, flag.ContinueOnError)
 	cfg := config.Load()
 	cfg.Version = version
-	port := set.Int("port", cfg.Port, "port HTTP server")
+	port := set.Int("port", cfg.Port, "port HTTP pada 127.0.0.1 (0 = pilih otomatis)")
 	databaseFile := set.String("db", cfg.DatabaseFile, "lokasi berkas SQLite")
 	staticDir := set.String("static", cfg.StaticDir, "folder aset frontend (kosong = pakai yang tertanam di biner)")
-	appMode := set.Bool("app", false, "mode aplikasi desktop: sembunyikan konsol, log ke berkas, buka peramban")
-	openBrowser := set.Bool("open", false, "buka peramban setelah server siap")
-	noBrowser := set.Bool("no-browser", false, "jangan buka peramban (untuk -app)")
+	appMode := set.Bool("app", false, "mode aplikasi desktop: jendela WebView2, tanpa konsol, log ke berkas")
+	browser := set.Bool("browser", false, "buka di peramban alih-alih jendela native (jalur debug)")
+	noOpen := set.Bool("no-browser", false, "jangan buka jendela maupun peramban (server saja)")
+	targetURL := set.String("url", "", "alamat yang dituju jendela/peramban (mis. URL Vite saat pengembangan)")
+	devtools := set.Bool("devtools", false, "izinkan perkakas pengembang pada jendela")
 	if err := set.Parse(args); err != nil {
 		return err
 	}
@@ -64,8 +84,7 @@ func run(args []string) error {
 
 	switch command {
 	case "serve", "server":
-		wantBrowser := *openBrowser || (cfg.AppMode && !*noBrowser)
-		return serve(cfg, wantBrowser)
+		return serve(cfg, resolveLaunch(*appMode, *browser, *noOpen, *targetURL, *devtools))
 	case "db:init":
 		return initDatabase(cfg)
 	case "db:clean":
@@ -81,9 +100,24 @@ func run(args []string) error {
 	}
 }
 
-// serve menjalankan bootstrap lalu membuka port. wantBrowser membuka peramban
-// setelah server menjawab pemeriksaan kesehatan.
-func serve(cfg config.Config, wantBrowser bool) error {
+// resolveLaunch menentukan apa yang muncul setelah server siap. -no-browser
+// selalu menang karena alur pengujian bergantung padanya; -browser dipakai
+// bersama -app berarti "aplikasinya jalan, tapi tampilkan di peramban".
+func resolveLaunch(appMode, browser, noOpen bool, url string, devtools bool) launch {
+	mode := launch{url: url, devtools: devtools}
+	switch {
+	case noOpen:
+	case browser:
+		mode.browser = true
+	case appMode:
+		mode.window = true
+	}
+	return mode
+}
+
+// serve membuka port loopback lalu melayani: di dalam jendela native (mode
+// desktop), atau tanpa jendela untuk jalur peramban/pengujian.
+func serve(cfg config.Config, mode launch) error {
 	if cfg.AppMode {
 		if err := redirectLogToFile(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "log ke berkas gagal, lanjut ke konsol: %v\n", err)
@@ -93,12 +127,10 @@ func serve(cfg config.Config, wantBrowser bool) error {
 		}
 	}
 
-	// Instans kedua tidak boleh gagal dengan galat port: cukup buka aplikasinya.
-	if desktop.ProbeRunning(cfg.Port, 700*time.Millisecond) {
-		log.Printf("Finova sudah berjalan di port %d — membuka di peramban.", cfg.Port)
-		if wantBrowser {
-			return desktop.OpenBrowser(fmt.Sprintf("http://localhost:%d", cfg.Port))
-		}
+	// Klik dua kali lagi tidak boleh melahirkan instans kedua: angkat saja
+	// jendela yang sudah ada.
+	if mode.window && desktop.FocusExisting(300*time.Millisecond) {
+		log.Println("Finova sudah terbuka — jendela yang ada diangkat.")
 		return nil
 	}
 
@@ -112,25 +144,50 @@ func serve(cfg config.Config, wantBrowser bool) error {
 	if err := server.Bootstrap(); err != nil {
 		return fmt.Errorf("bootstrap database gagal: %w", err)
 	}
+	listener, err := server.Listen()
+	if err != nil {
+		return err
+	}
+	target := mode.url
+	if target == "" {
+		target = fmt.Sprintf("http://127.0.0.1:%d", httpapi.PortOf(listener))
+	}
+
 	log.Printf("Finova %s — bootstrap siap (database %s).", version, cfg.DatabaseFile)
 	if !web.Available(cfg.StaticDir) {
 		log.Println("Catatan: frontend belum tertanam. Jalankan `npm run build:client` lalu bangun ulang biner Go.")
 	}
-
-	if wantBrowser {
-		go func() {
-			url := fmt.Sprintf("http://localhost:%d", cfg.Port)
-			if err := desktop.WaitReady(cfg.Port, 15*time.Second); err != nil {
-				log.Printf("peramban tidak dibuka: %v", err)
-				return
-			}
-			_ = desktop.OpenBrowser(url)
-		}()
-	}
+	fmt.Printf("Finova siap di %s\n", target)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return server.Run(ctx)
+	serverErr := make(chan error, 1)
+	go func() { serverErr <- server.Serve(ctx, listener) }()
+
+	if mode.window {
+		if err := desktop.RunWindow(ctx, desktop.WindowOptions{
+			Title: windowTitle, URL: target, UserDataDir: cfg.WebViewUserData(), DevTools: mode.devtools,
+		}); err != nil {
+			stop()
+			<-serverErr
+			return err
+		}
+		stop()
+		return <-serverErr
+	}
+
+	if mode.browser {
+		if err := desktop.OpenBrowser(target); err != nil {
+			log.Printf("peramban tidak dibuka: %v", err)
+		}
+	}
+	select {
+	case err := <-serverErr:
+		return err
+	case <-ctx.Done():
+		stop()
+		return <-serverErr
+	}
 }
 
 // redirectLogToFile memindahkan keluaran log ke berkas di folder data, karena mode

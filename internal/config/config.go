@@ -16,6 +16,9 @@ const dotenvPath = ".env"
 
 // Config adalah seluruh nilai yang dibutuhkan server.
 type Config struct {
+	// Port adalah tempat server bind. Nilai 0 (bawaan) berarti OS yang memilih
+	// port bebas, sehingga Finova tidak pernah merebut port tetap (3000/5000/5199)
+	// yang dipakai proyek lain. Port nyata dibaca kembali dari listener.
 	Port         int
 	DatabaseFile string
 	ClientOrigin string
@@ -25,7 +28,7 @@ type Config struct {
 	CompanyID    int64
 	Version      string
 	// AppMode menandai "aplikasi desktop": tanpa jendela konsol, log ke berkas,
-	// dan peramban dibuka otomatis. Dipakai pintasan hasil installer.
+	// dan satu jendela native (WebView2) — bukan tab peramban.
 	AppMode bool
 }
 
@@ -36,14 +39,17 @@ const fallbackDatabaseName = "finova.sqlite"
 func Load() Config {
 	env := readDotenv(dotenvPath)
 	explicitDB := firstNonEmpty(os.Getenv("DATABASE_FILE"), env["DATABASE_FILE"])
-	port, err := strconv.Atoi(firstNonEmpty(os.Getenv("PORT"), env["PORT"], "5000"))
-	if err != nil || port <= 0 || port > 65535 {
-		port = 5000
+	// Port kosong = 0 = serahkan ke OS. Hanya angka 1..65535 yang dihormati.
+	port, err := strconv.Atoi(firstNonEmpty(os.Getenv("PORT"), env["PORT"]))
+	if err != nil || port < 0 || port > 65535 {
+		port = 0
 	}
 	return Config{
 		Port:         port,
 		DatabaseFile: resolveDatabaseFile(explicitDB),
-		ClientOrigin: firstNonEmpty(os.Getenv("CLIENT_ORIGIN"), env["CLIENT_ORIGIN"], "http://localhost:3000"),
+		// ClientOrigin hanya diperlukan saat pengembangan (Vite memanggil API lintas
+		// asal). Kosong = hanya asal loopback yang diterima seeCORS.
+		ClientOrigin: firstNonEmpty(os.Getenv("CLIENT_ORIGIN"), env["CLIENT_ORIGIN"]),
 		CompanyName:  firstNonEmpty(os.Getenv("COMPANY_NAME"), env["COMPANY_NAME"], "PT Finova Akuntansi Indonesia"),
 		OperatorName: firstNonEmpty(os.Getenv("OPERATOR_NAME"), env["OPERATOR_NAME"], "Operator"),
 		StaticDir:    firstNonEmpty(os.Getenv("STATIC_DIR"), env["STATIC_DIR"]),
@@ -109,6 +115,17 @@ func (c Config) DataDir() string {
 // LogFile mengembalikan lokasi berkas log saat berjalan tanpa konsol.
 func (c Config) LogFile() string {
 	return filepath.Join(c.DataDir(), "finova.log")
+}
+
+// WebViewUserData adalah folder profil Chromium untuk jendela WebView2. Ia ikut
+// ke folder data (bukan Program Files) agar dapat ditulisi tanpa hak administrator.
+// WebView2 menolak jalur relatif, jadi hasilnya selalu absolut.
+func (c Config) WebViewUserData() string {
+	path := filepath.Join(c.DataDir(), "webview2")
+	if abs, err := filepath.Abs(path); err == nil {
+		return abs
+	}
+	return path
 }
 
 // readDotenv parser minimal: baris KOLOM=nilai, komentar #, dan tanda kutip opsional.

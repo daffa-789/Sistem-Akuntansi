@@ -9,6 +9,9 @@ coverage/
 *.log
 .env
 
+# Ruang kerja sementara agent (spike, screenshot, skrip uji sekali pakai)
+.scratch/
+
 # Basis data lokal (skema SQLite kini ikut version control di internal/db/schema)
 database/*.sqlite
 database/*.sqlite-shm
@@ -16,6 +19,9 @@ database/*.sqlite-wal
 database/*.db
 database/*.db-shm
 database/*.db-wal
+
+# Profil Chromium jendela WebView2 (cache & shader, dibuat otomatis saat -app)
+database/webview2/
 
 # Hasil build frontend ditanam ke biner; hanya penanda folder yang di-commit
 internal/web/dist/*

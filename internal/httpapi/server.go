@@ -153,16 +153,18 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) error {
 	})
 }
 
-// withCORS mengizinkan asal permintaan dari Vite dev server (mode pengembangan).
-func withCORS(origin string, next http.Handler) http.Handler {
-	if origin == "" {
-		origin = "*"
-	}
+// withCORS menentukan asal mana yang boleh memanggil API. Server hanya bind ke
+// loopback, jadi yang diizinkan: asal loopback (jendela WebView2, peramban lokal)
+// dan ClientOrigin eksplisit milik Vite saat pengembangan. Dulu wildcard "*":
+// situs yang dibuka user dapat ikut mengetuk port lokal aplikasi.
+func withCORS(allowed string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
-		header.Set("Access-Control-Allow-Origin", origin)
-		header.Set("Access-Control-Allow-Credentials", "true")
-		header.Set("Vary", "Origin")
+		if origin := r.Header.Get("Origin"); origin != "" && corsAllows(origin, allowed) {
+			header.Set("Access-Control-Allow-Origin", origin)
+			header.Set("Access-Control-Allow-Credentials", "true")
+			header.Add("Vary", "Origin")
+		}
 		if r.Method == http.MethodOptions {
 			header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
@@ -172,6 +174,12 @@ func withCORS(origin string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+var loopbackOrigin = regexp.MustCompile(`^http://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$`)
+
+func corsAllows(origin, allowed string) bool {
+	return origin == allowed || loopbackOrigin.MatchString(origin)
 }
 
 // withRecovery mengubah panic menjadi 500 agar server tidak mati mendadak.
@@ -563,16 +571,23 @@ func (s *Server) nextVoucher(ctx db.Execer, yearMonth string) (string, error) {
 
 var trailingNumber = regexp.MustCompile(`-(\d+)$`)
 
-// Run membuka port dan melayani sampai ctx dibatalkan.
-func (s *Server) Run(ctx context.Context) error {
-	address := fmt.Sprintf(":%d", s.cfg.Port)
+// Listen membuka soket HANYA pada 127.0.0.1: aplikasi ini desktop lokal, bukan
+// layanan jaringan. Port 0 berarti OS yang memilih port bebas sehingga Finova
+// tidak pernah bentrok dengan port proyek lain di mesin yang sama.
+func (s *Server) Listen() (net.Listener, error) {
+	address := fmt.Sprintf("127.0.0.1:%d", s.cfg.Port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		if strings.Contains(err.Error(), "bind") || strings.Contains(err.Error(), "address already in use") {
-			return fmt.Errorf("port %d sudah digunakan oleh instans Finova lain: %w", s.cfg.Port, err)
+			return nil, fmt.Errorf("port %d tidak dapat dipakai: %w", s.cfg.Port, err)
 		}
-		return err
+		return nil, err
 	}
+	return listener, nil
+}
+
+// Serve melayani pada listener sampai ctx dibatalkan.
+func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 	server := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -580,9 +595,26 @@ func (s *Server) Run(ctx context.Context) error {
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()
-	log.Printf("Finova API (Go) berjalan di http://localhost:%d", s.cfg.Port)
+	log.Printf("Finova API (Go) berjalan di http://127.0.0.1:%d", PortOf(listener))
 	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
+}
+
+// Run membuka port lalu melayani sampai ctx dibatalkan.
+func (s *Server) Run(ctx context.Context) error {
+	listener, err := s.Listen()
+	if err != nil {
+		return err
+	}
+	return s.Serve(ctx, listener)
+}
+
+// PortOf membaca port nyata dari listener — wajib saat port yang diminta 0.
+func PortOf(listener net.Listener) int {
+	if addr, ok := listener.Addr().(*net.TCPAddr); ok {
+		return addr.Port
+	}
+	return 0
 }

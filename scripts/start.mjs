@@ -13,7 +13,12 @@ if (!fs.existsSync(outPath)) {
   if (built.status !== 0) process.exit(built.status ?? 1)
 }
 
-const child = spawn(outPath, process.argv.slice(2), { stdio: 'inherit', windowsHide: true })
+// Tanpa argumen = aplikasi desktop (satu jendela WebView2). Sertakan -browser atau
+// -no-browser bila memang menginginkan jalur lain.
+const args = process.argv.slice(2)
+if (!args.length) args.push('-app')
+
+const child = spawn(outPath, args, { stdio: 'inherit', windowsHide: true })
 child.on('error', (error) => {
   console.error(`Gagal menjalankan ${outPath}: ${error.message}`)
   process.exitCode = 1

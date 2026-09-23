@@ -1,6 +1,7 @@
-// Package desktop berisi perlengkapan kecil agar biner Go dapat dipakai sebagai
-// "aplikasi desktop" tanpa Electron: membuka peramban, menghilangkan jendela konsol,
-// dan mendeteksi instans yang sudah berjalan.
+// Package desktop membuat biner Go menjadi aplikasi desktop sungguhan: satu
+// jendela WebView2 (window_windows.go), membuka peramban untuk jalur debug, dan
+// menghilangkan jendela konsol. Tidak ada Electron dan tidak ada Node.js saat
+// berjalan.
 package desktop
 
 import (
