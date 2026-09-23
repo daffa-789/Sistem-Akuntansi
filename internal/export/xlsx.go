@@ -256,13 +256,13 @@ type JournalData struct {
 
 // JournalRow satu baris tabel jurnal (entri sudah diuraikan per baris).
 type JournalRow struct {
-	Date      string
-	Voucher   string
-	ShowHead  bool
-	Account   string
-	Ref       string
-	Memo      string
-	LineMemo  string
+	Date     string
+	Voucher  string
+	ShowHead bool
+	Account  string
+	Ref      string
+	Memo     string
+	LineMemo string
 	// EndMemo ditulis pada baris TERAKHIR satu entri; lembar Excel mencetaknya sebagai
 	// baris keterangan terpisah di bawah seluruh baris jurnal entri tersebut.
 	EndMemo   string

@@ -170,3 +170,21 @@ INSERT OR IGNORE INTO accounts (company_id, code, name, account_group, account_s
   (1, '5700', 'Beban Asuransi', 'EXPENSE', 'INSURANCE', 'DEBIT', 'OPERATING', 0),
   (1, '5800', 'Beban Iklan & Promosi', 'EXPENSE', 'MARKETING', 'DEBIT', 'OPERATING', 0),
   (1, '5900', 'Beban Operasional Lain-lain', 'EXPENSE', 'OTHER_EXPENSE', 'DEBIT', 'OPERATING', 0);
+
+-- ===== Pemutar musik =====
+-- Hanya menautkan video YouTube RESMI (tidak menyimpan audio). Berkas audio lokal
+-- milik pengguna disimpan di peramban (IndexedDB), bukan di basis data pembukuan ini.
+CREATE TABLE IF NOT EXISTS music_tracks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  artist TEXT NULL,
+  youtube_id TEXT NOT NULL,
+  thumbnail_url TEXT NULL,
+  added_by INTEGER REFERENCES users(id),
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, youtube_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_music_tracks_position ON music_tracks(company_id, position, id);

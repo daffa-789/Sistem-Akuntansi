@@ -7,6 +7,7 @@ import { LedgerView } from './components/views/LedgerView.js'
 import { TrialBalanceView } from './components/views/TrialBalanceView.js'
 import { AccountsView } from './components/views/AccountsView.js'
 import { GlobalSearchModal } from './components/modals/GlobalSearchModal.js'
+import { MusicPlayer } from './components/widgets/MusicPlayer.js'
 import { PageLoading } from './components/ui/PageLoading.js'
 import { ErrorNotice } from './components/ui/ErrorNotice.js'
 import { useLoad } from './hooks/useLoad.js'
@@ -127,6 +128,8 @@ function Workspace(): React.JSX.Element {
         accounts={accounts}
         setRoute={setRoute}
       />
+
+      <MusicPlayer notify={notify} />
 
       {showOnboard && (
         <OnboardingWalkthrough

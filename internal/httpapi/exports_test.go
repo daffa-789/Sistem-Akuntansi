@@ -181,4 +181,3 @@ func mustRows(t *testing.T, file *excelize.File, sheet string) []string {
 	}
 	return flat
 }
-

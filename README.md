@@ -58,6 +58,29 @@ Server API ditulis ulang dalam **Go murni** (`net/http` + driver SQLite tanpa CG
 - **Dashboard Keuangan**: Grafik kinerja pendapatan vs beban serta indikator kas & bank real-time.
 - **Operator tunggal**: aplikasi lokal tanpa login; setiap transaksi tetap tercatat atas nama operator dan meninggalkan jejak audit lengkap di `audit_logs`.
 
+### 5. Pemutar Musik (Sambil Mengerjakan Laporan)
+Di dasar layar ada dock musik dengan **piringan hitam yang berputar saat lagu jalan**;
+label tengah piringan memakai **sampul lagu** yang sedang diputar, jadi tampilan ikut
+berubah tiap berganti lagu.
+
+- **Sumber lagu**: (a) tempel tautan YouTube — diputar lewat *YouTube IFrame Player API*
+  resmi, jadi tidak ada berkas audio yang disalin ke komputer; judul, pemegang hak, dan
+  sampul diambil otomatis oleh server lewat oEmbed. (b) **impor berkas audio sendiri**
+  (mp3/m4a/ogg/opus/wav/flac) — tersimpan di IndexedDB peramban, tetap ada setelah
+  tutup-aplikasi, dan bisa dipakai luring.
+- **Daftar putar** disimpan di basis data (`music_tracks`) sehingga ikut terbawa bila
+  folder data dipindah; ada tombol simpan/hapus, acak, ulang satu lagu, dan lanjut otomatis
+  saat lagu selesai.
+- **Kontrol**: klik piringan atau tombol putar, geser posisi, atur volume, bisukan.
+- **Pintasan**: `Alt+P` putar/jeda, `Alt+←` / `Alt+→` ganti lagu, `Alt+M` bisukan.
+- Dock tidak ikut tercetak (kelas `no-print`) dan menghormati setelan
+  `prefers-reduced-motion`: bila pengguna mematikan animasi, piringan berhenti berputar
+  dan diganti cincin aksen statis sebagai tanda "sedang diputar".
+- Bawaan awal berisi tiga lagu resmi kanal **Lyn - Topic** (distribusi OST Atlus/Sony):
+  *Rivers In the Desert*, *Life Will Change*, *Last Surprise*. Saran ini otomatis hilang
+  begitu daftar putar Anda berisi lagu sendiri. Sebagian kanal menonaktifkan penyematan —
+  untuk itu tersedia tombol "Buka di YouTube" pada tiap baris.
+
 ---
 
 ## 📁 Struktur Proyek
@@ -97,9 +120,11 @@ Sistem-Akuntansi/
 │   │   ├── modals/         # JournalModal, ReverseJournalModal, TemplateModal, AuditLog, dsb.
 │   │   ├── ui/             # Reusable UI (Button, Modal, Badge, AccountPicker, AmountInput, ...)
 │   │   └── views/          # Dashboard, Accounts, Journals, Ledger, TrialBalance
-│   ├── hooks/              # Custom hooks (useLoad)
-│   ├── services/           # downloads.ts (unduh berkas dari /api/exports)
-│   ├── utils/              # formatters & validators
+│   ├── services/           # downloads.ts (unduh berkas dari /api/exports),
+│   │                       # localAudio.ts (berkas audio pengguna di IndexedDB)
+│   ├── utils/              # formatters, validators, music.ts (parsing & urutan lagu)
+│   ├── hooks/              # useLoad, useYouTubePlayer (IFrame API resmi)
+│   ├── components/widgets/ # MusicPlayer (piringan berputar + daftar putar)
 │   ├── api.ts              # HTTP client bertipe
 │   ├── App.tsx             # Root layout & view switcher
 │   └── main.tsx            # React DOM mounting
@@ -276,6 +301,9 @@ Satu baris tetap disimpan di tabel `users` sebagai pencatat transaksi karena `jo
 | --- | --- |
 | `Ctrl+K` | Pencarian akun cepat |
 | `Esc` | Menutup jendela dialog / modal paling atas |
+| `Alt+P` | Putar / jeda musik |
+| `Alt+→` / `Alt+←` | Lagu berikutnya / sebelumnya |
+| `Alt+M` | Bisukan / nyalakan suara |
 
 ### Di dalam form "Catat Transaksi"
 

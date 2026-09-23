@@ -121,6 +121,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/templates", s.handle(s.postTemplate))
 	mux.HandleFunc("DELETE /api/templates/{id}", s.handle(s.deleteTemplate))
 
+	mux.HandleFunc("GET /api/tracks", s.handle(s.getTracks))
+	mux.HandleFunc("POST /api/tracks", s.handle(s.postTrack))
+	mux.HandleFunc("PUT /api/tracks/order", s.handle(s.putTrackOrder))
+	mux.HandleFunc("DELETE /api/tracks/{id}", s.handle(s.deleteTrack))
+
 	mux.HandleFunc("GET /api", s.handle(s.notFound))
 	mux.HandleFunc("/", s.handle(s.notFound))
 }
