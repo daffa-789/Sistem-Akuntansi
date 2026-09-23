@@ -58,28 +58,41 @@ Server API ditulis ulang dalam **Go murni** (`net/http` + driver SQLite tanpa CG
 - **Dashboard Keuangan**: Grafik kinerja pendapatan vs beban serta indikator kas & bank real-time.
 - **Operator tunggal**: aplikasi lokal tanpa login; setiap transaksi tetap tercatat atas nama operator dan meninggalkan jejak audit lengkap di `audit_logs`.
 
-### 5. Pemutar Musik (Sambil Mengerjakan Laporan)
-Di dasar layar ada dock musik dengan **piringan hitam yang berputar saat lagu jalan**;
-label tengah piringan memakai **sampul lagu** yang sedang diputar, jadi tampilan ikut
-berubah tiap berganti lagu.
+### 5. Pemutar Musik (Kiri Atas, Minimalis, Bisa Ditutup)
+Pemutar musik berupa strip ramping di **kiri atas** area kerja, bukan bar besar di bawah:
 
-- **Sumber lagu**: (a) tempel tautan YouTube — diputar lewat *YouTube IFrame Player API*
-  resmi, jadi tidak ada berkas audio yang disalin ke komputer; judul, pemegang hak, dan
-  sampul diambil otomatis oleh server lewat oEmbed. (b) **impor berkas audio sendiri**
-  (mp3/m4a/ogg/opus/wav/flac) — tersimpan di IndexedDB peramban, tetap ada setelah
-  tutup-aplikasi, dan bisa dipakai luring.
-- **Daftar putar** disimpan di basis data (`music_tracks`) sehingga ikut terbawa bila
-  folder data dipindah; ada tombol simpan/hapus, acak, ulang satu lagu, dan lanjut otomatis
-  saat lagu selesai.
-- **Kontrol**: klik piringan atau tombol putar, geser posisi, atur volume, bisukan.
-- **Pintasan**: `Alt+P` putar/jeda, `Alt+←` / `Alt+→` ganti lagu, `Alt+M` bisukan.
-- Dock tidak ikut tercetak (kelas `no-print`) dan menghormati setelan
-  `prefers-reduced-motion`: bila pengguna mematikan animasi, piringan berhenti berputar
-  dan diganti cincin aksen statis sebagai tanda "sedang diputar".
+- **Piringan minimalis** — lingkaran datar 38 px dengan alur halus; **berputar saat lagu
+  jalan** dan **label tengahnya memakai sampul lagu** yang sedang diputar, jadi tampilannya
+  ikut berganti tiap lagu. Klik piringan = putar/jeda.
+- **Bisa ditutup** — tombol `×` meliput widget menjadi chip piringan kecil di pojok kiri atas
+  (atau `⌃` untuk mengecilkan); tombol panah pada chip membukanya kembali. Mode ini tersimpan
+  di `localStorage`, jadi tetap sama saat aplikasi dibuka lagi.
+- **Sumber lagu**: (a) tempel tautan YouTube — diputar lewat *YouTube IFrame Player API* resmi,
+  judul/pemegang hak/sampul diambil otomatis oleh server lewat oEmbed; (b) impor **berkas audio
+  milik sendiri** (mp3, m4a, ogg, opus, wav, flac) yang tersimpan di IndexedDB peramban.
+- **Kelola berkas dan daftar putar**
+  - *Simpan berkas ke komputer* — menyalin ulang berkas audio **milik Anda sendiri** dari
+    peramban ke folder unduhan (untuk dipindah ke perangkat lain).
+  - *Ekspor .m3u* — daftar putar menjadi berkas teks berisi **tautan** YouTube (bukan audio),
+    bisa dibuka di VLC/Winamp.
+  - *Hapus lagu* per baris dan *Kosongkan* seluruh daftar (lagu tersimpan + berkas di peramban),
+    dengan konfirmasi.
+  - Daftar lagu YouTube disimpan di basis data (`music_tracks`) sehingga ikut terbawa saat
+    folder data dipindah.
+- **Kontrol**: lagu sebelumnya/berikutnya, geser posisi, volume, bisukan, acak, ulang satu lagu,
+  dan lanjut otomatis saat lagu selesai. **Pintasan**: `Alt+P`, `Alt+→` / `Alt+←`, `Alt+M`.
+- Dock tidak ikut tercetak (`@media print` + kelas `no-print`) dan menghormati
+  `prefers-reduced-motion`: bila animasi dimatikan di sistem, piringan berhenti berputar dan
+  diganti cincin aksen statis sebagai tanda "sedang diputar".
 - Bawaan awal berisi tiga lagu resmi kanal **Lyn - Topic** (distribusi OST Atlus/Sony):
-  *Rivers In the Desert*, *Life Will Change*, *Last Surprise*. Saran ini otomatis hilang
-  begitu daftar putar Anda berisi lagu sendiri. Sebagian kanal menonaktifkan penyematan —
-  untuk itu tersedia tombol "Buka di YouTube" pada tiap baris.
+  *Rivers In the Desert*, *Life Will Change*, *Last Surprise*. Saran ini otomatis hilang begitu
+  daftar putar Anda berisi lagu sendiri. Sebagian kanal menonaktifkan penyematan — tersedia
+  tombol "Buka di YouTube" pada tiap baris.
+
+> **Catatan hak cipta**: aplikasi ini **tidak mengunduh audio dari YouTube**. Pemutaran memakai
+> pemutar resmi YouTube, dan penyalinan lagu Atlus ke berkas adalah pelanggaran ketentuan
+> YouTube serta hak cipta. Yang bisa disimpan ke komputer hanyalah berkas audio yang Anda
+> impor sendiri.
 
 ---
 

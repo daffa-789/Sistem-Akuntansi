@@ -1,31 +1,36 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Album, ListMusic, Maximize2, Minimize2, Music2, Pause, Play, Plus, Repeat,
-  Shuffle, SkipBack, SkipForward, Trash2, Volume2, X, ExternalLink
+  Album, ChevronDown, ChevronUp, Download, ListMusic, Music2, Pause, Play, Plus,
+  Repeat, Save, Shuffle, SkipBack, SkipForward, Trash2, Upload, Volume2, X
 } from 'lucide-react'
 import { request } from '../../api.js'
 import { useYouTubePlayer } from '../../hooks/useYouTubePlayer.js'
-import { addLocalTrack, getLocalUrl, isAudioFile, listLocalTracks, removeLocalTrack } from '../../services/localAudio.js'
 import {
-  formatClock, mergeTracks, nextTrackIndex, parseYouTubeInput, trackFromRow,
-  youtubeWatchUrl, type Track
+  addLocalTrack, clearLocalTracks, getLocalUrl, isAudioFile, listLocalTracks,
+  removeLocalTrack, saveLocalTrackToDisk
+} from '../../services/localAudio.js'
+import {
+  buildPlaylistM3u, formatClock, mergeTracks, nextTrackIndex, parseYouTubeInput,
+  sanitizeFileName, trackFromRow, youtubeWatchUrl, type Track
 } from '../../utils/music.js'
 
 const YT_HOST_ID = 'finova-yt-host'
 const VOLUME_KEY = 'finova_music_volume'
-const OPEN_KEY = 'finova_music_open'
+const MODE_KEY = 'finova_music_mode'
 const SEED_DISMISS_KEY = 'finova_music_seed'
 
-// Pemutar musik yang menempel di dasar layar, supaya laporan bisa dikerjakan sambil
-// mendengar musik. Sumber: tautan YouTube resmi (disemat) atau berkas audio milik
-// sendiri yang tersimpan di peramban.
+type WidgetMode = 'full' | 'mini'
+
+// Pemutar musik kecil di kiri atas: piringan minimalis yang berputar saat lagu jalan,
+// sampul lagu menjadi label tengah piringan, dan bisa dikecilkan atau ditutup.
 export function MusicPlayer({ notify }: { notify: (message: string, isError?: boolean) => void }): React.JSX.Element {
   const [serverTracks, setServerTracks] = useState<Track[]>([])
   const [localTracks, setLocalTracks] = useState<Track[]>([])
   const [index, setIndex] = useState(-1)
   const [shuffle, setShuffle] = useState(false)
   const [repeatOne, setRepeatOne] = useState(false)
-  const [panelOpen, setPanelOpen] = useState<boolean>(() => localStorage.getItem(OPEN_KEY) === '1')
+  const [mode, setMode] = useState<WidgetMode>(() => (localStorage.getItem(MODE_KEY) === 'mini' ? 'mini' : 'full'))
+  const [panelOpen, setPanelOpen] = useState(false)
   const [volume, setVolume] = useState<number>(() => Number(localStorage.getItem(VOLUME_KEY) ?? 70))
   const [muted, setMuted] = useState(false)
   const [linkDraft, setLinkDraft] = useState('')
@@ -59,7 +64,7 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
     }
   }, [])
 
-  // Jam putar untuk berkas lokal (elemen <audio> tidak punya event per detik).
+  // Jam putar berkas lokal (elemen <audio> tidak memberi event per detik).
   useEffect(() => {
     if (!audioActive) return
     const tick = (): void => {
@@ -96,7 +101,7 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
         localId: item.id
       })))
     } catch {
-      // penyimpanan lokal tidak tersedia (mode privat): abaikan diam-diam
+      // penyimpanan lokal tidak tersedia (mode privat): biarkan daftar kosong
     }
   }, [])
 
@@ -112,13 +117,14 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
   }, [volume, muted, yt])
 
   useEffect(() => {
-    localStorage.setItem(OPEN_KEY, panelOpen ? '1' : '0')
-  }, [panelOpen])
+    localStorage.setItem(MODE_KEY, mode)
+  }, [mode])
 
-  const playTrack = useCallback(async (position: number) => {
-    const track = tracks[position]
+  const playTrack = useCallback(async (wanted: number) => {
+    const track = tracks[wanted]
     if (!track) return
-    setIndex(position)
+    setIndex(wanted)
+    setAudioClock({ position: 0, duration: track.duration || 0 })
     const audio = audioRef.current
     if (track.kind === 'local' && track.localId) {
       yt.pause()
@@ -133,12 +139,8 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
           await audio.play()
         }
       } catch (error: any) {
-        // Peramban menolak pemutaran tanpa interaksi pengguna (autoplay policy).
-        if (error?.name === 'NotAllowedError') {
-          notify('Peramban meminta interaksi dulu - klik tombol putar sekali lagi.')
-        } else {
-          notify(error.message || 'Berkas audio tidak dapat diputar.', true)
-        }
+        if (error?.name === 'NotAllowedError') notify('Peramban meminta interaksi dulu - klik piringan sekali lagi.')
+        else notify(error.message || 'Berkas audio tidak dapat diputar.', true)
       }
       return
     }
@@ -157,7 +159,6 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
     void playTrack(next)
   }, [tracks.length, index, repeatOne, shuffle, playTrack])
 
-  // Lagu selesai -> lanjut otomatis (hormati repeat/shuffle).
   useEffect(() => {
     function onEnded() {
       advance(1)
@@ -172,15 +173,14 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
       return
     }
     if (current.kind === 'local' && audioRef.current) {
-      if (audioRef.current.paused) void audioRef.current.play()
+      if (audioRef.current.paused) void audioRef.current.play().catch(() => notify('Peramban menolak pemutaran otomatis.', true))
       else audioRef.current.pause()
       return
     }
     if (yt.playing) yt.pause()
     else yt.play()
-  }, [current, tracks.length, playTrack, yt])
+  }, [current, tracks.length, playTrack, yt, notify])
 
-  // Pintasan keyboard: Alt+P putar/jeda, Alt+panah ganti lagu, Alt+M bisukan.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (!event.altKey || event.ctrlKey || event.metaKey) return
@@ -226,17 +226,17 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
   }
 
   async function onFiles(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files || [])
-    const accepted = files.filter(isAudioFile)
-    if (!accepted.length) {
-      if (files.length) notify('Format berkas tidak dikenali. Pakai mp3, m4a, ogg, opus, wav, atau flac.', true)
+    const files = Array.from(event.target.files || []).filter(isAudioFile)
+    if (!files.length) {
+      notify('Pilih berkas audio (mp3, m4a, ogg, opus, wav, atau flac).', true)
+      event.target.value = ''
       return
     }
     setBusy(true)
     try {
-      for (const file of accepted) await addLocalTrack(file)
+      for (const file of files) await addLocalTrack(file)
       await refreshLocal()
-      notify(`${accepted.length} berkas audio ditambahkan (tersimpan di peramban ini).`)
+      notify(`${files.length} berkas ditambahkan — tersimpan di peramban ini.`)
     } catch (error: any) {
       notify(`Gagal menyimpan berkas: ${error.message}`, true)
     } finally {
@@ -288,121 +288,101 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
     }
   }
 
-  const label = current?.thumbnail
-    ? { backgroundImage: `url(${current.thumbnail})` }
-    : undefined
+  async function saveToDisk(track: Track) {
+    if (track.kind !== 'local' || !track.localId) return
+    try {
+      await saveLocalTrackToDisk(track.localId, `${sanitizeFileName(track.title)}.audio`)
+      notify('Berkas audio Anda disimpan ke folder unduhan.')
+    } catch (error: any) {
+      notify(`Gagal menyimpan berkas: ${error.message}`, true)
+    }
+  }
 
+  function exportPlaylist() {
+    const text = buildPlaylistM3u(tracks)
+    if (!text) {
+      notify('Belum ada lagu YouTube di daftar putar untuk diekspor.', true)
+      return
+    }
+    const blob = new Blob([text], { type: 'audio/x-mpegurl' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'Finova_daftar_putar.m3u'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000)
+    notify('Daftar putar diekspor sebagai .m3u (berisi tautan, bukan berkas audio).')
+  }
+
+  async function clearAll() {
+    if (!window.confirm('Hapus seluruh daftar putar (lagu tersimpan + berkas di peramban)?')) return
+    setBusy(true)
+    try {
+      audioRef.current?.pause()
+      yt.pause()
+      for (const track of serverTracks) {
+        if (track.trackId) await request(`/tracks/${track.trackId}`, { method: 'DELETE' })
+      }
+      await clearLocalTracks()
+      setIndex(-1)
+      await refreshServer()
+      await refreshLocal()
+      notify('Daftar putar dikosongkan.')
+    } catch (error: any) {
+      notify(`Penghapusan tidak lengkap: ${error.message}`, true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const labelStyle = current?.thumbnail ? { backgroundImage: `url("${current.thumbnail}")` } : undefined
+
+  // ---------- Mode kecil: hanya piringan, bisa dibuka kembali ----------
+  if (mode === 'mini') {
+    return (
+      <>
+        <div id={YT_HOST_ID} className="music-host" aria-hidden="true" />
+        <div className="music-mini no-print" role="group" aria-label="Pemutar musik (mode kecil)">
+          <button
+            className={`vinyl vinyl-min ${playing ? 'spinning' : ''}`}
+            onClick={togglePlay}
+            aria-label={playing ? 'Jeda musik' : 'Putar musik'}
+            title={playing ? 'Jeda (Alt+P)' : 'Putar (Alt+P)'}
+          >
+            <span className="vinyl-label" style={labelStyle} />
+            {!current?.thumbnail && <Music2 size={11} className="vinyl-fallback" />}
+          </button>
+          <button className="mini-open" onClick={() => setMode('full')} title="Buka pemutar" aria-label="Buka pemutar musik">
+            <ChevronDown size={13} />
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  // ---------- Mode penuh: strip ramping di kiri atas ----------
   return (
     <>
       <div id={YT_HOST_ID} className="music-host" aria-hidden="true" />
 
-      {panelOpen && (
-        <aside className="music-panel no-print" aria-label="Daftar putar musik">
-          <header className="music-panel-head">
-            <h2><ListMusic size={15} /> Daftar putar</h2>
-            <button className="icon-button" onClick={() => setPanelOpen(false)} aria-label="Tutup daftar putar">
-              <X size={15} />
-            </button>
-          </header>
-
-          <form className="music-add" onSubmit={addLink}>
-            <input
-              type="url"
-              value={linkDraft}
-              onChange={(event) => setLinkDraft(event.target.value)}
-              placeholder="Tempel tautan YouTube (kanal resmi)…"
-              aria-label="Tautan YouTube"
-            />
-            <button type="submit" className="btn btn-small" disabled={busy || !linkDraft.trim()}>
-              <Plus size={14} /> Tambah
-            </button>
-          </form>
-
-          <label className="music-file">
-            <input type="file" accept="audio/*" multiple onChange={onFiles} disabled={busy} />
-            <Music2 size={14} /> Impor berkas audio dari komputer
-          </label>
-
-          <ol className="music-list">
-            {tracks.length === 0 && (
-              <li className="music-empty">Belum ada lagu. Tempel tautan YouTube atau impor berkas audio.</li>
-            )}
-            {tracks.map((track, position) => (
-              <li key={track.key} className={position === index ? 'active' : ''}>
-                <button
-                  className="music-row"
-                  onClick={() => void playTrack(position)}
-                  title={track.kind === 'local' ? 'Putar berkas lokal' : 'Putar lewat penyematan YouTube'}
-                >
-                  <span className="music-row-art">
-                    {track.thumbnail
-                      ? <img src={track.thumbnail} alt="" loading="lazy" />
-                      : <Album size={16} />}
-                  </span>
-                  <span className="music-row-text">
-                    <strong>{track.title}</strong>
-                    <small>{track.artist}{track.kind === 'local' ? ' · lokal' : ''}</small>
-                  </span>
-                  <span className="music-row-time">{track.duration ? formatClock(track.duration) : ''}</span>
-                </button>
-                <span className="music-row-actions">
-                  {track.kind === 'youtube' && track.youtubeId && !track.trackId && (
-                    <button className="icon-button" onClick={() => void saveSeed(track)} title="Simpan ke daftar putar">
-                      <Plus size={14} />
-                    </button>
-                  )}
-                  {track.kind === 'youtube' && track.youtubeId && (
-                    <a
-                      className="icon-button"
-                      href={youtubeWatchUrl(track.youtubeId)}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Buka di YouTube"
-                    >
-                      <ExternalLink size={14} />
-                    </a>
-                  )}
-                  <button className="icon-button" onClick={() => void removeTrack(track)} title="Hapus dari daftar putar">
-                    <Trash2 size={14} />
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ol>
-
-          <p className="music-note">
-            Audio diputar langsung dari YouTube (bukan salinan) atau dari berkas Anda sendiri.
-            Sebagian kanal menonaktifkan penyematan - kalau gagal putar, pakai tombol
-            {" “Buka di YouTube” "}.
-          </p>
-        </aside>
-      )}
-
-      <footer className="music-dock no-print" aria-label="Pemutar musik">
-        <div
-          className={`vinyl ${playing ? 'spinning' : ''}`}
+      <section className="music-bar no-print" aria-label="Pemutar musik">
+        <button
+          className={`vinyl vinyl-min ${playing ? 'spinning' : ''}`}
           onClick={togglePlay}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              togglePlay()
-            }
-          }}
           aria-label={playing ? 'Jeda musik' : 'Putar musik'}
           title={playing ? 'Jeda (Alt+P)' : 'Putar (Alt+P)'}
         >
-          <div className="vinyl-label" style={label}>
-            {!current?.thumbnail && <Music2 size={14} />}
-          </div>
-        </div>
+          <span className="vinyl-label" style={labelStyle} />
+          {!current?.thumbnail && <Music2 size={11} className="vinyl-fallback" />}
+        </button>
 
-        <div className="music-meta">
+        <div className="music-info">
           <strong title={current?.title}>{current ? current.title : 'Pemutar musik'}</strong>
           <small>
             {current
-              ? current.artist
+              ? `${current.artist}${current.kind === 'local' ? ' · berkas lokal' : ''}`
               : 'Alt+P putar/jeda · Alt+panah ganti lagu · Alt+M bisukan'}
           </small>
           {yt.error && <em className="music-error">{yt.error}</em>}
@@ -410,13 +390,13 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
 
         <div className="music-controls">
           <button className="icon-button" onClick={() => advance(-1)} title="Lagu sebelumnya (Alt+←)" aria-label="Lagu sebelumnya">
-            <SkipBack size={16} />
+            <SkipBack size={15} />
           </button>
           <button className="music-play" onClick={togglePlay} title="Putar/jeda (Alt+P)" aria-label={playing ? 'Jeda' : 'Putar'}>
-            {playing ? <Pause size={17} /> : <Play size={17} />}
+            {playing ? <Pause size={15} /> : <Play size={15} />}
           </button>
           <button className="icon-button" onClick={() => advance(1)} title="Lagu berikutnya (Alt+→)" aria-label="Lagu berikutnya">
-            <SkipForward size={16} />
+            <SkipForward size={15} />
           </button>
         </div>
 
@@ -438,51 +418,100 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
         </div>
 
         <div className="music-extra">
-          <button
-            className={`icon-button ${shuffle ? 'on' : ''}`}
-            onClick={() => setShuffle((value) => !value)}
-            title="Acak"
-            aria-label="Acak"
-            aria-pressed={shuffle}
-          >
-            <Shuffle size={15} />
+          <button className={`icon-button ${shuffle ? 'on' : ''}`} onClick={() => setShuffle((v) => !v)} title="Acak" aria-label="Acak" aria-pressed={shuffle}>
+            <Shuffle size={14} />
           </button>
-          <button
-            className={`icon-button ${repeatOne ? 'on' : ''}`}
-            onClick={() => setRepeatOne((value) => !value)}
-            title="Ulangi lagu ini"
-            aria-label="Ulangi lagu ini"
-            aria-pressed={repeatOne}
-          >
-            <Repeat size={15} />
+          <button className={`icon-button ${repeatOne ? 'on' : ''}`} onClick={() => setRepeatOne((v) => !v)} title="Ulangi lagu ini" aria-label="Ulangi lagu ini" aria-pressed={repeatOne}>
+            <Repeat size={14} />
           </button>
-          <button
-            className="icon-button"
-            onClick={() => setMuted((value) => !value)}
-            title="Bisukan (Alt+M)"
-            aria-label="Bisukan"
-          >
-            <Volume2 size={15} />
+          <button className="icon-button" onClick={() => setMuted((v) => !v)} title="Bisukan (Alt+M)" aria-label="Bisukan">
+            <Volume2 size={14} />
           </button>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={volume}
-            onChange={(event) => setVolume(Number(event.target.value))}
-            className="music-volume"
-            aria-label="Kekuatan suara"
-          />
-          <button
-            className="icon-button"
-            onClick={() => setPanelOpen((value) => !value)}
-            title={panelOpen ? 'Tutup daftar putar' : 'Buka daftar putar'}
-            aria-label="Daftar putar"
-          >
-            {panelOpen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          <input type="range" min={0} max={100} value={volume} onChange={(event) => setVolume(Number(event.target.value))} className="music-volume" aria-label="Kekuatan suara" />
+          <button className={`icon-button ${panelOpen ? 'on' : ''}`} onClick={() => setPanelOpen((v) => !v)} title="Daftar putar" aria-label="Daftar putar" aria-expanded={panelOpen}>
+            <ListMusic size={14} />
+          </button>
+          <button className="icon-button" onClick={() => setMode('mini')} title="Kecilkan" aria-label="Kecilkan pemutar">
+            <ChevronUp size={14} />
+          </button>
+          <button className="icon-button" onClick={() => { setMode('mini'); setPanelOpen(false) }} title="Tutup" aria-label="Tutup pemutar">
+            <X size={14} />
           </button>
         </div>
-      </footer>
+
+        {panelOpen && (
+          <div className="music-card">
+            <form className="music-add" onSubmit={addLink}>
+              <input
+                type="url"
+                value={linkDraft}
+                onChange={(event) => setLinkDraft(event.target.value)}
+                placeholder="Tempel tautan YouTube (kanal resmi)…"
+                aria-label="Tautan YouTube"
+              />
+              <button type="submit" className="button secondary small" disabled={busy || !linkDraft.trim()}>
+                <Plus size={13} /> Tambah
+              </button>
+            </form>
+
+            <div className="music-tools">
+              <label className="music-tool">
+                <input type="file" accept="audio/*" multiple onChange={onFiles} disabled={busy} />
+                <Upload size={13} /> Impor berkas audio
+              </label>
+              <button type="button" className="music-tool" onClick={exportPlaylist} title="Unduh daftar tautan sebagai .m3u">
+                <Save size={13} /> Ekspor .m3u
+              </button>
+              <button type="button" className="music-tool danger" onClick={() => void clearAll()} disabled={busy || !tracks.length}>
+                <Trash2 size={13} /> Kosongkan
+              </button>
+            </div>
+
+            <ol className="music-list">
+              {tracks.length === 0 && <li className="music-empty">Belum ada lagu. Tempel tautan YouTube atau impor berkas audio Anda.</li>}
+              {tracks.map((track, wanted) => (
+                <li key={track.key} className={wanted === index ? 'active' : ''}>
+                  <button className="music-row" onClick={() => void playTrack(wanted)} title={track.kind === 'local' ? 'Putar berkas lokal' : 'Putar lewat penyematan YouTube'}>
+                    <span className="music-row-art">
+                      {track.thumbnail ? <img src={track.thumbnail} alt="" loading="lazy" /> : <Album size={14} />}
+                    </span>
+                    <span className="music-row-text">
+                      <strong>{track.title}</strong>
+                      <small>{track.artist}{track.kind === 'local' ? ' · lokal' : ''}</small>
+                    </span>
+                    <span className="music-row-time">{track.duration ? formatClock(track.duration) : ''}</span>
+                  </button>
+                  <span className="music-row-actions">
+                    {track.kind === 'youtube' && track.youtubeId && !track.trackId && (
+                      <button className="icon-button" onClick={() => void saveSeed(track)} title="Simpan ke daftar putar" aria-label="Simpan ke daftar putar">
+                        <Plus size={13} />
+                      </button>
+                    )}
+                    {track.kind === 'youtube' && track.youtubeId && (
+                      <a className="icon-button" href={youtubeWatchUrl(track.youtubeId)} target="_blank" rel="noreferrer" title="Buka di YouTube" aria-label="Buka di YouTube">
+                        <Download size={13} />
+                      </a>
+                    )}
+                    {track.kind === 'local' && (
+                      <button className="icon-button" onClick={() => void saveToDisk(track)} title="Simpan berkas ini ke komputer" aria-label="Simpan berkas ke komputer">
+                        <Download size={13} />
+                      </button>
+                    )}
+                    <button className="icon-button" onClick={() => void removeTrack(track)} title="Hapus dari daftar putar" aria-label="Hapus lagu">
+                      <Trash2 size={13} />
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            <p className="music-note">
+              Lagu YouTube diputar lewat pemutar resmi YouTube (tidak diunduh). Berkas audio Anda tersimpan di
+              peramban ini dan bisa disimpan ulang ke komputer atau dihapus.
+            </p>
+          </div>
+        )}
+      </section>
     </>
   )
 }

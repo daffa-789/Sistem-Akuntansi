@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_TRACKS, formatClock, mergeTracks, nextTrackIndex, parseYouTubeInput,
-  trackFromRow, youtubeThumbnail, youtubeWatchUrl
+  DEFAULT_TRACKS, buildPlaylistM3u, formatClock, mergeTracks, nextTrackIndex,
+  parseYouTubeInput, sanitizeFileName, trackFromRow, youtubeThumbnail, youtubeWatchUrl
 } from './music.js'
 
 describe('parseYouTubeInput', () => {
@@ -86,5 +86,31 @@ describe('tautan resmi bawaan', () => {
       expect(track.thumbnail).toContain(track.youtubeId as string)
       expect(youtubeWatchUrl(track.youtubeId as string)).toContain(`watch?v=${track.youtubeId}`)
     }
+  })
+})
+
+describe('buildPlaylistM3u', () => {
+  it('menulis header M3U, durasi, dan tautan YouTube', () => {
+    const tracks = [trackFromRow({ id: 1, youtube_id: 'dsuJZx24V_A', title: 'Life Will Change', artist: 'Lyn - Topic' })]
+    tracks[0].duration = 262.4
+    const text = buildPlaylistM3u(tracks)
+    expect(text.startsWith('#EXTM3U\n')).toBe(true)
+    expect(text).toContain('#EXTINF:262,Lyn - Topic - Life Will Change')
+    expect(text).toContain('https://www.youtube.com/watch?v=dsuJZx24V_A')
+  })
+
+  it('melewati berkas lokal dan mengembalikan string kosong bila tidak ada tautan', () => {
+    const local = [{ key: 'local:a', kind: 'local' as const, title: 'Punya saya', artist: 'Berkas lokal', localId: 'a' }]
+    expect(buildPlaylistM3u(local)).toBe('')
+    expect(buildPlaylistM3u([])).toBe('')
+  })
+})
+
+describe('sanitizeFileName', () => {
+  it('membuang karakter yang tidak boleh dipakai pada nama berkas', () => {
+    expect(sanitizeFileName('Rivers: In the Desert / Take?')).toBe('Rivers In the Desert Take')
+    expect(sanitizeFileName('   ')).toBe('lagu')
+    expect(sanitizeFileName('')).toBe('lagu')
+    expect(sanitizeFileName('a'.repeat(200)).length).toBeLessThanOrEqual(80)
   })
 })

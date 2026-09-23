@@ -117,6 +117,30 @@ export const DEFAULT_TRACKS: Track[] = SEED_SOURCE.map((item) => ({
   thumbnail: youtubeThumbnail(item.youtubeId)
 }))
 
+// sanitizeFileName membersihkan judul untuk dipakai sebagai nama berkas.
+export function sanitizeFileName(value: string): string {
+  const cleaned = (value || 'lagu')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned.slice(0, 80) || 'lagu'
+}
+
+// buildPlaylistM3u menyusun berkas M3U berisi TAUTAN YouTube resmi (bukan audio).
+// Berkas lokal dilewati karena tidak punya alamat yang berarti di komputer lain.
+export function buildPlaylistM3u(tracks: Track[]): string {
+  const lines = ['#EXTM3U', '#EXTGENRE:Finova - daftar putar']
+  for (const track of tracks) {
+    if (track.kind !== 'youtube' || !track.youtubeId) continue
+    const seconds = Math.max(0, Math.round(track.duration || 0))
+    const label = track.artist ? `${track.artist} - ${track.title}` : track.title
+    lines.push(`#EXTINF:${seconds},${label}`.replace(/\n/g, ' '))
+    lines.push(youtubeWatchUrl(track.youtubeId))
+  }
+  if (lines.length <= 2) return ''
+  return `${lines.join('\n')}\n`
+}
+
 // mergeTracks menggabungkan daftar server + berkas lokal. Saran bawaan hanya
 // ditampilkan bila keduanya benar-benar kosong, supaya daftar putar milik pengguna
 // tidak pernah tercampur usulan.

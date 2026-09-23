@@ -106,6 +106,8 @@ function Workspace(): React.JSX.Element {
       setDark={setDark}
       onSearch={() => setSearchOpen(true)}
     >
+      <MusicPlayer notify={notify} />
+
       {companyState.error || accountsState.error ? (
         <ErrorNotice error={companyState.error || accountsState.error} />
       ) : (
@@ -128,8 +130,6 @@ function Workspace(): React.JSX.Element {
         accounts={accounts}
         setRoute={setRoute}
       />
-
-      <MusicPlayer notify={notify} />
 
       {showOnboard && (
         <OnboardingWalkthrough

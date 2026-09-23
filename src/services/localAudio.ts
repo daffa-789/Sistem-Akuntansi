@@ -131,6 +131,34 @@ export async function removeLocalTrack(id: string): Promise<void> {
   })
 }
 
+export async function getLocalBlob(id: string): Promise<Blob> {
+  const database = await openDatabase()
+  const transaction = database.transaction(AUDIO_STORE, 'readonly')
+  const blob = await requestToPromise<Blob | undefined>(transaction.objectStore(AUDIO_STORE).get(id))
+  if (!blob) throw new Error('Berkas audio tidak ditemukan di penyimpanan.')
+  return blob
+}
+
+// saveLocalTrackToDisk menyimpan ulang berkas MILIK PENGGUNA sendiri ke folder
+// unduhan komputer (misalnya untuk memindahkannya ke perangkat lain).
+export async function saveLocalTrackToDisk(id: string, fileName: string): Promise<void> {
+  const blob = await getLocalBlob(id)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName || 'audio.wav'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000)
+}
+
+export async function clearLocalTracks(): Promise<number> {
+  const records = await listLocalTracks()
+  for (const record of records) await removeLocalTrack(record.id)
+  return records.length
+}
+
 export function isAudioFile(file: File): boolean {
   return /^audio\//.test(file.type) || /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)$/i.test(file.name)
 }
