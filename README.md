@@ -16,7 +16,7 @@ Server API ditulis ulang dalam **Go murni** (`net/http` + driver SQLite tanpa CG
 - **Aset frontend**: hasil build Vite (`internal/web/dist`) di-embed ke biner Go, dilayani dengan fallback SPA untuk rute dalam
 - **Shared Types**: `shared/types.ts` sebagai kontrak data frontend; kunci JSON backend mengikuti nama kolom SQLite
 - **Testing**: `go test` (unit akuntansi, lapisan database, integrasi HTTP penuh) + [Vitest](https://vitest.dev/) untuk komponen & utilitas frontend
-- **Export Engine (sisi klien)**: ExcelJS (`.xlsx`) & jsPDF / html2canvas (`.pdf`)
+- **Export Engine (sisi server)**: `.xlsx` dibuat `internal/export` memakai excelize, `.pdf` memakai [go-pdf/fpdf](https://github.com/go-pdf/fpdf) — endpoint `/api/exports/*`
 
 ---
 
@@ -72,6 +72,7 @@ Sistem-Akuntansi/
 │   │   └── schema/         # schema.sqlite.sql (ditanam ke biner lewat go:embed)
 │   ├── domain/             # Aturan pembukuan: validasi jurnal, neraca saldo, laba rugi,
 │   │                       # neraca, perubahan modal, arus kas, jurnal penutup
+│   ├── export/             # Pembuat berkas laporan .xlsx (excelize) dan .pdf (go-pdf/fpdf)
 │   ├── httpapi/            # Rute /api/*, CORS, pemetaan galat, layanan jurnal/periode/impor/laporan
 │   ├── web/                # go:embed hasil build frontend + penyimpan berkas SPA (fallback index.html)
 │   └── xlsx/               # Pembuat templat & parser berkas Excel impor (excelize)
@@ -97,7 +98,7 @@ Sistem-Akuntansi/
 │   │   ├── ui/             # Reusable UI (Button, Modal, Badge, AccountPicker, AmountInput, ...)
 │   │   └── views/          # Dashboard, Accounts, Journals, Ledger, TrialBalance
 │   ├── hooks/              # Custom hooks (useLoad)
-│   ├── services/           # excelExporter (ExcelJS sisi klien)
+│   ├── services/           # downloads.ts (unduh berkas dari /api/exports)
 │   ├── utils/              # formatters & validators
 │   ├── api.ts              # HTTP client bertipe
 │   ├── App.tsx             # Root layout & view switcher
@@ -162,7 +163,7 @@ bin\finova.exe version              # info versi & arsitektur biner
 
 ```bash
 npm run installer
-# -> build\bin\Finova-Setup-1.0.0-amd64.exe  (±5,7 MiB)
+# -> build\bin\Finova-Setup-1.0.0-amd64.exe  (±5,5 MiB)
 ```
 
 Perkakas yang dipakai: [NSIS 3](https://nsis.sourceforge.io/Download) (`makensis`). Skripnya ada di
@@ -194,14 +195,33 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\uji-installer.ps1
 
 | Komponen | Ukuran |
 | --- | --- |
-| `bin/finova.exe` (build strip `-s -w`, ikon, frontend tertanam) | 18,3 MiB |
-| `Finova-Setup-1.0.0-amd64.exe` (LZMA solid) | 5,7 MiB |
-| Terpasang (program + uninstaller) | 18,4 MiB |
-| `node_modules` — hanya untuk membangun UI, tidak dipakai saat berjalan | 230,6 MiB |
+| `bin/finova.exe` (build strip `-s -w`, ikon, frontend tertanam) | 17,4 MiB |
+| `Finova-Setup-1.0.0-amd64.exe` (LZMA solid) | 5,5 MiB |
+| Terpasang (program + uninstaller) | 17,5 MiB |
+| Aset frontend di dalam biner (setelah ekspor pindah ke server) | 0,65 MiB |
+| `node_modules` — hanya untuk membangun UI, tidak dipakai saat berjalan | 159,5 MiB |
 
-Build dirampingkan dengan `-trimpath -ldflags "-s -w"` (menghemat ±28% dibanding build biasa:
-24,6 → 17,7 MiB sebelum ikon). Perbandingan era sebelumnya: pemasangan Electron lama menempati
-**570 MiB** di disk, dan server Node membutuhkan `node.exe` (89 MB) saat berjalan.
+Build dirampingkan dengan `-trimpath -ldflags "-s -w"` (hemat ±28%: 24,6 → 17,7 MiB sebelum ikon).
+Perpindahan pembuatan berkas laporan dari peramban ke server (`internal/export`) memangkas
+`node_modules` dari 230,6 → 159,5 MiB (exceljs, jspdf, jspdf-autotable, html2canvas tidak dipakai lagi)
+dan aset tertanam dari 2,31 → 0,65 MiB. Perbandingan era sebelumnya: pemasangan Electron lama
+menempati **570 MiB** di disk (terukur dari mesin pengembang), dan server Node membutuhkan
+`node.exe` (89 MB) saat berjalan.
+
+### 📄 Berkas laporan dibuat server
+
+| Endpoint | Hasil |
+| --- | --- |
+| `GET /api/exports/journal.xlsx` | Buku Jurnal Umum + Rekapitulasi Jurnal (dua sheet) |
+| `GET /api/exports/journal.pdf` | Jurnal A4 portrait + rekapitulasi + lembar pengesahan |
+| `GET /api/exports/ledger.xlsx` | Buku besar satu akun dengan saldo berjalan |
+| `GET /api/exports/trial-balance.xlsx` | Neraca saldo |
+| `GET /api/exports/accounts.xlsx` | Master bagan akun |
+
+Semua menerima `from`, `to`, dan (untuk jurnal) `status`, `accountId`, `q`, `sort`, `dir` — sama dengan
+filter yang sedang aktif di layar — serta `maker`, `checker`, `approver` untuk lembar pengesahan.
+Nominal ditulis sebagai angka (bukan teks) agar masih bisa dijumlah di Excel, dengan format `#,##0`;
+format tanggal dan "Rp" mengikuti konvensi Indonesia seperti tampilan aplikasi.
 
 Untuk membersihkan hasil build dan cache yang selalu bisa dibuat ulang:
 

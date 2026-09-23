@@ -31,10 +31,23 @@ import { AuditLogModal } from '../modals/AuditLogModal.js'
 import { useLoad } from '../../hooks/useLoad.js'
 import { request } from '../../api.js'
 import { apiPath, dateLabel, firstDay, money, today, SOURCE_LABEL } from '../../utils/formatters.js'
-import { exportJournalToExcel, JournalRecap } from '../../services/excelExporter.js'
+import { exportJournalFile, type Query } from '../../services/downloads.js'
 import { Account, Company } from '../../../shared/types.js'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+
+// Kontrak rekapitulasi (dihitung dari laporan register, ditampilkan dan diekspor).
+export interface RecapAccountItem {
+  code: string
+  name: string
+  amount: number
+}
+
+export interface JournalRecap {
+  debits: RecapAccountItem[]
+  credits: RecapAccountItem[]
+  totalDebit: number
+  totalCredit: number
+  isBalanced?: boolean
+}
 
 export interface RegisterFilters {
   from: string
@@ -297,24 +310,22 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
     }
   }
 
+  // Berkas dibuat di server Go; parameter filter diteruskan agar isi berkas
+  // sama dengan yang sedang dilihat pada register.
+  function exportQuery(): Query {
+    return {
+      status: filters.status,
+      accountId: filters.account || '',
+      q: filters.search.trim(),
+      sort: filters.sortKey,
+      dir: filters.sortDir
+    }
+  }
+
   async function handleExportExcel() {
     setExporting(true)
     try {
-      let signers = { maker: 'Staf Keuangan', checker: 'Auditor / Penguji', approver: 'Pimpinan / Direktur' }
-      try {
-        const raw = localStorage.getItem('finova_signers')
-        if (raw) signers = JSON.parse(raw)
-      } catch {}
-
-      await exportJournalToExcel({
-        company,
-        // Ekspor selalu berisi seluruh hasil filter, tidak ikut terpotong pagian.
-        entries: sortedEntries as any,
-        range,
-        totals,
-        recap: liveRecap,
-        signers
-      })
+      await exportJournalFile(range, 'xlsx', exportQuery())
       notify('Buku Jurnal Umum & Rekapitulasi berhasil diekspor ke Excel (.xlsx).')
     } catch (err: any) {
       notify(`Gagal ekspor Excel: ${err.message}`, true)
@@ -325,128 +336,7 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
 
   async function handleExportPDF() {
     try {
-      const doc = new jsPDF()
-
-      // Read saved signers
-      let signers = { maker: 'Staf Keuangan', checker: 'Auditor / Penguji', approver: 'Pimpinan / Direktur' }
-      try {
-        const raw = localStorage.getItem('finova_signers')
-        if (raw) signers = JSON.parse(raw)
-      } catch {}
-
-      doc.setFontSize(14)
-      doc.setFont('helvetica', 'bold')
-      doc.text(company?.name || 'PT Finova Akuntansi Indonesia', 14, 15)
-      doc.setFontSize(11)
-      doc.text('JURNAL UMUM (GENERAL JOURNAL)', 14, 21)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9)
-      doc.text(
-        `Periode: ${dateLabel(range.from)} s.d. ${dateLabel(range.to)} | Dicetak: ${dateLabel(today())}`,
-        14,
-        26
-      )
-
-      const body: any[] = []
-      for (const e of sortedEntries) {
-        for (const [idx, l] of e.lines.entries()) {
-          const isFirst = idx === 0
-          const isCredit = Number(l.credit || 0) > 0
-          body.push([
-            isFirst ? e.entry_date : '',
-            isFirst ? e.voucher_no : '',
-            (isCredit ? '     ↳ ' : '') +
-              `${l.account_name}` +
-              (l.memo ? `\n(${l.memo})` : isFirst ? `\n(${e.description})` : ''),
-            l.code,
-            Number(l.debit) > 0 ? money(l.debit) : '',
-            Number(l.credit) > 0 ? money(l.credit) : ''
-          ])
-        }
-      }
-      body.push(['', '', 'TOTAL', '', money(totals.debit), money(totals.credit)])
-
-      autoTable(doc, {
-        startY: 32,
-        head: [['Tanggal', 'No. Bukti', 'Keterangan Akun & Transaksi', 'Ref', 'Debit (Rp)', 'Kredit (Rp)']],
-        body,
-        styles: { fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: [14, 113, 69] },
-        columnStyles: {
-          0: { cellWidth: 22 },
-          1: { cellWidth: 26 },
-          2: { cellWidth: 70 },
-          3: { cellWidth: 15, halign: 'center' },
-          4: { cellWidth: 28, halign: 'right' },
-          5: { cellWidth: 28, halign: 'right' }
-        },
-        didParseCell: (dataCell: any) => {
-          if (dataCell.row.index === body.length - 1) {
-            dataCell.cell.styles.fontStyle = 'bold'
-            dataCell.cell.styles.fillColor = [240, 253, 244]
-          }
-        }
-      })
-
-      const finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 150
-      if (finalY < 225) {
-        doc.setFontSize(10)
-        doc.setFont('helvetica', 'bold')
-        doc.text('REKAPITULASI JURNAL UMUM', 14, finalY)
-        const recapBody: any[] = []
-        const maxLen = Math.max(liveRecap.debits.length, liveRecap.credits.length)
-        for (let i = 0; i < maxLen; i++) {
-          const d = liveRecap.debits[i]
-          const c = liveRecap.credits[i]
-          recapBody.push([
-            d ? `${d.code} - ${d.name}` : '',
-            d ? money(d.amount) : '',
-            c ? `${c.code} - ${c.name}` : '',
-            c ? money(c.amount) : ''
-          ])
-        }
-        recapBody.push([
-          'TOTAL DEBIT',
-          money(liveRecap.totalDebit),
-          'TOTAL KREDIT',
-          money(liveRecap.totalCredit)
-        ])
-        autoTable(doc, {
-          startY: finalY + 4,
-          head: [['Akun Debit', 'Jumlah', 'Akun Kredit', 'Jumlah']],
-          body: recapBody,
-          styles: { fontSize: 7, cellPadding: 2 },
-          headStyles: { fillColor: [2, 132, 199] },
-          columnStyles: {
-            0: { cellWidth: 55 },
-            1: { cellWidth: 35, halign: 'right' },
-            2: { cellWidth: 55 },
-            3: { cellWidth: 35, halign: 'right' }
-          }
-        })
-      }
-
-      // Add signature block at the bottom
-      const sigY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 15 : 220
-      if (sigY < 250) {
-        doc.setFontSize(9)
-        doc.setFont('helvetica', 'bold')
-        doc.text('Dibuat Oleh:', 25, sigY)
-        doc.text('Diperiksa Oleh:', 90, sigY)
-        doc.text('Disetujui Oleh:', 155, sigY)
-
-        doc.setFont('helvetica', 'normal')
-        doc.line(20, sigY + 18, 65, sigY + 18)
-        doc.text(signers.maker || 'Staf Keuangan', 25, sigY + 22)
-
-        doc.line(85, sigY + 18, 130, sigY + 18)
-        doc.text(signers.checker || 'Auditor / Penguji', 90, sigY + 22)
-
-        doc.line(150, sigY + 18, 195, sigY + 18)
-        doc.text(signers.approver || 'Pimpinan / Direktur', 155, sigY + 22)
-      }
-
-      doc.save(`Finova_Jurnal_Umum_${range.from}_sd_${range.to}.pdf`)
+      await exportJournalFile(range, 'pdf', exportQuery())
       notify('Buku Jurnal Umum berhasil diekspor ke PDF.')
     } catch (err: any) {
       notify(`Gagal ekspor PDF: ${err.message}`, true)

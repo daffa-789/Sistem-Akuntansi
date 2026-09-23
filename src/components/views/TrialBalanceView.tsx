@@ -6,7 +6,7 @@ import { ErrorNotice } from '../ui/ErrorNotice.js'
 import { useLoad } from '../../hooks/useLoad.js'
 import { request } from '../../api.js'
 import { apiPath, firstDay, money, today, GL } from '../../utils/formatters.js'
-import { exportTrialBalanceToExcel } from '../../services/excelExporter.js'
+import { exportTrialBalanceFile } from '../../services/downloads.js'
 import { Company, TrialBalanceResult } from '../../../shared/types.js'
 
 export interface TrialBalanceViewProps {
@@ -28,12 +28,7 @@ export function TrialBalanceView({ company, notify }: TrialBalanceViewProps): Re
     if (!tb?.rows) return
     setExporting(true)
     try {
-      await exportTrialBalanceToExcel({
-        company,
-        accounts: tb.rows,
-        asOfDate: range.to,
-        totals: tb.totals
-      })
+      await exportTrialBalanceFile(range)
       notify(`Neraca Saldo per ${range.to} berhasil diekspor ke Excel (.xlsx).`)
     } catch (err: any) {
       notify(`Gagal ekspor Excel: ${err.message}`, true)

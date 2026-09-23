@@ -6,7 +6,7 @@ import { ErrorNotice } from '../ui/ErrorNotice.js'
 import { useLoad } from '../../hooks/useLoad.js'
 import { request } from '../../api.js'
 import { apiPath, dateLabel, firstDay, money, today, GL } from '../../utils/formatters.js'
-import { exportLedgerToExcel } from '../../services/excelExporter.js'
+import { exportLedgerFile } from '../../services/downloads.js'
 import { Account, Company } from '../../../shared/types.js'
 
 export interface LedgerViewProps {
@@ -50,13 +50,7 @@ export function LedgerView({ accounts = [], company, notify }: LedgerViewProps):
     if (!currentAccount || !ledgerData) return
     setExporting(true)
     try {
-      await exportLedgerToExcel({
-        company,
-        account: currentAccount,
-        rows: ledgerData.rows || [],
-        initialBalance: ledgerData.opening || 0,
-        range
-      })
+      await exportLedgerFile(range, selectedAccountId, currentAccount.code)
       notify(`Buku Besar ${currentAccount.code} berhasil diekspor ke Excel (.xlsx).`)
     } catch (err: any) {
       notify(`Gagal ekspor Excel: ${err.message}`, true)

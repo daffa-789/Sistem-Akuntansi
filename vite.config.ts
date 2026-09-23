@@ -29,9 +29,7 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             vendor: ['react', 'react-dom'],
-            charts: ['recharts'],
-            excel: ['exceljs'],
-            pdf: ['jspdf', 'jspdf-autotable']
+            charts: ['recharts']
           }
         }
       }

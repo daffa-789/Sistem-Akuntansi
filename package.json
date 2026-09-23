@@ -29,9 +29,6 @@
     "db:clean": "go run ./cmd/finova db:clean"
   },
   "dependencies": {
-    "exceljs": "^4.4.0",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.475.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

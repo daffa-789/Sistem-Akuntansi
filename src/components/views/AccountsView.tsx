@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Download, Printer } from 'lucide-react'
 import { Button } from '../ui/Button.js'
 import { GL } from '../../utils/formatters.js'
-import { exportAccountsToExcel } from '../../services/excelExporter.js'
+import { exportAccountsFile } from '../../services/downloads.js'
 import { Account, AccountGroup, Company } from '../../../shared/types.js'
 
 export interface AccountsViewProps {
@@ -31,10 +31,7 @@ export function AccountsView({ accounts = [], company, notify }: AccountsViewPro
   async function handleExportExcel() {
     setExporting(true)
     try {
-      await exportAccountsToExcel({
-        company,
-        accounts: filtered
-      })
+      await exportAccountsFile()
       notify('Master Bagan Akun berhasil diekspor ke Excel (.xlsx).')
     } catch (err: any) {
       notify(`Gagal ekspor Excel: ${err.message}`, true)

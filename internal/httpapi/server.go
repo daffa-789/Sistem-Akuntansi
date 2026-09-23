@@ -111,6 +111,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /api/reports/{kind}", s.handle(s.report))
 
+	mux.HandleFunc("GET /api/exports/journal.xlsx", s.handle(s.exportJournalXLSX))
+	mux.HandleFunc("GET /api/exports/journal.pdf", s.handle(s.exportJournalPDF))
+	mux.HandleFunc("GET /api/exports/ledger.xlsx", s.handle(s.exportLedgerXLSX))
+	mux.HandleFunc("GET /api/exports/trial-balance.xlsx", s.handle(s.exportTrialBalanceXLSX))
+	mux.HandleFunc("GET /api/exports/accounts.xlsx", s.handle(s.exportAccountsXLSX))
+
 	mux.HandleFunc("GET /api/templates", s.handle(s.getTemplates))
 	mux.HandleFunc("POST /api/templates", s.handle(s.postTemplate))
 	mux.HandleFunc("DELETE /api/templates/{id}", s.handle(s.deleteTemplate))
