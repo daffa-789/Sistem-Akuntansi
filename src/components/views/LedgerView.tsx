@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Download, Printer, RefreshCw } from 'lucide-react'
 import { Button } from '../ui/Button.js'
+import { PrintHeader, PrintSignatures } from '../ui/PrintFrame.js'
 import { PageLoading } from '../ui/PageLoading.js'
 import { ErrorNotice } from '../ui/ErrorNotice.js'
 import { useLoad } from '../../hooks/useLoad.js'
@@ -61,6 +62,7 @@ export function LedgerView({ accounts = [], company, notify }: LedgerViewProps):
 
   return (
     <>
+      <PrintHeader title={'Buku Besar' + (currentAccount ? ' — ' + currentAccount.code + ' ' + currentAccount.name : '')} company={company} range={range} />
       <div className="toolbar no-print">
         <div>
           <h1 className="page-title">Buku Besar (General Ledger)</h1>
@@ -129,43 +131,27 @@ export function LedgerView({ accounts = [], company, notify }: LedgerViewProps):
       <ErrorNotice error={error} />
 
       {currentAccount && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: 14,
-            marginBottom: 20
-          }}
-        >
-          <div className="stat-card" style={{ padding: 14 }}>
-            <div className="stat-label">KODE &amp; NAMA AKUN</div>
-            <div style={{ fontWeight: 700, fontSize: 16, marginTop: 4 }}>
+        <div className="kpi-grid">
+          <div className="stat-card kpi">
+            <div className="kpi-label">Kode &amp; Nama Akun</div>
+            <div className="kpi-value sm">
               {currentAccount.code} — {currentAccount.name}
             </div>
           </div>
-          <div className="stat-card" style={{ padding: 14 }}>
-            <div className="stat-label">KELOMPOK &amp; SALDO NORMAL</div>
-            <div style={{ fontWeight: 700, fontSize: 16, marginTop: 4 }}>
+          <div className="stat-card kpi">
+            <div className="kpi-label">Kelompok &amp; Saldo Normal</div>
+            <div className="kpi-value sm">
               {GL[currentAccount.account_group] || currentAccount.account_group} (
               {currentAccount.normal_balance})
             </div>
           </div>
-          <div className="stat-card" style={{ padding: 14 }}>
-            <div className="stat-label">SALDO AWAL PERIODE</div>
-            <div style={{ fontWeight: 700, fontSize: 16, marginTop: 4, color: '#0f172a' }}>
-              {ledgerData ? money(ledgerData.opening) : '-'}
-            </div>
+          <div className="stat-card kpi">
+            <div className="kpi-label">Saldo Awal Periode</div>
+            <div className="kpi-value sm">{ledgerData ? money(ledgerData.opening) : '-'}</div>
           </div>
-          <div
-            className="stat-card"
-            style={{ padding: 14, background: '#f0fdf4', borderColor: '#bbf7d0' }}
-          >
-            <div className="stat-label" style={{ color: '#166534' }}>
-              SALDO AKHIR PERIODE
-            </div>
-            <div style={{ fontWeight: 800, fontSize: 18, marginTop: 4, color: '#15803d' }}>
-              {ledgerData ? money(ledgerData.closing) : '-'}
-            </div>
+          <div className="stat-card kpi accent-debit">
+            <div className="kpi-label">Saldo Akhir Periode</div>
+            <div className="kpi-value">{ledgerData ? money(ledgerData.closing) : '-'}</div>
           </div>
         </div>
       )}
@@ -199,7 +185,7 @@ export function LedgerView({ accounts = [], company, notify }: LedgerViewProps):
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ background: '#f8fafc', fontStyle: 'italic' }}>
+                <tr className="row-opening">
                   <td>{dateLabel(range.from)}</td>
                   <td>-</td>
                   <td>Saldo Awal Periode</td>
@@ -236,7 +222,7 @@ export function LedgerView({ accounts = [], company, notify }: LedgerViewProps):
               </tfoot>
             </table>
             {!ledgerData?.rows?.length && (
-              <div style={{ padding: '24px 16px', textAlign: 'center', color: '#64748b' }}>
+              <div className="muted" style={{ padding: '24px 16px', textAlign: 'center' }}>
                 Tidak ada transaksi mutasi pada akun ini selama periode {dateLabel(range.from)} s.d.{' '}
                 {dateLabel(range.to)}.
               </div>
@@ -244,6 +230,7 @@ export function LedgerView({ accounts = [], company, notify }: LedgerViewProps):
           </div>
         </section>
       )}
+      <PrintSignatures />
     </>
   )
 }

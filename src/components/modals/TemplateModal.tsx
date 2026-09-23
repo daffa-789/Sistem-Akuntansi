@@ -27,7 +27,7 @@ export function TemplateModal({ templates = [], onUse, onClose }: TemplateModalP
         </Button>
       }
     >
-      <p style={{ margin: '0 0 14px', fontSize: 13, color: '#64748b' }}>
+      <p className="muted" style={{ margin: '0 0 14px', fontSize: 13 }}>
         Pilih template untuk mempercepat pencatatan transaksi yang sering muncul dalam praktikum dan soal kasus
         akuntansi.
       </p>

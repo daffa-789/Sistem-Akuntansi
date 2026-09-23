@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { Download, Printer, RefreshCw } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, Printer, RefreshCw } from 'lucide-react'
 import { Button } from '../ui/Button.js'
+import { PrintHeader, PrintSignatures } from '../ui/PrintFrame.js'
 import { PageLoading } from '../ui/PageLoading.js'
 import { ErrorNotice } from '../ui/ErrorNotice.js'
 import { useLoad } from '../../hooks/useLoad.js'
@@ -41,6 +42,7 @@ export function TrialBalanceView({ company, notify }: TrialBalanceViewProps): Re
 
   return (
     <>
+      <PrintHeader title='Neraca Saldo (Trial Balance)' company={company} range={range} />
       <div className="toolbar no-print">
         <div>
           <h1 className="page-title">Neraca Saldo (Trial Balance)</h1>
@@ -130,36 +132,22 @@ export function TrialBalanceView({ company, notify }: TrialBalanceViewProps): Re
               </tfoot>
             </table>
             {isBalanced ? (
-              <div
-                style={{
-                  padding: 12,
-                  background: '#f0fdf4',
-                  color: '#166534',
-                  textAlign: 'center',
-                  fontSize: 13,
-                  fontWeight: 700
-                }}
-              >
-                ✓ Neraca Saldo Seimbang (Total Debit = Total Kredit)
+              <div className="verdict">
+                <CheckCircle2 size={15} /> Neraca Saldo Seimbang (Total Debit = Total Kredit)
               </div>
             ) : (
-              <div
-                style={{
-                  padding: 12,
-                  background: '#fff1f2',
-                  color: '#9f1239',
-                  textAlign: 'center',
-                  fontSize: 13,
-                  fontWeight: 700
-                }}
-              >
-                ⚠️ Terdapat Selisih Neraca Saldo:{' '}
-                {money(Math.abs((tb?.totals?.debit || 0) - (tb?.totals?.credit || 0)))}
+              <div className="verdict is-off">
+                <AlertTriangle size={15} />
+                <span>
+                  Terdapat selisih neraca saldo:{' '}
+                  {money(Math.abs((tb?.totals?.debit || 0) - (tb?.totals?.credit || 0)))}
+                </span>
               </div>
             )}
           </div>
         </section>
       )}
+      <PrintSignatures />
     </>
   )
 }

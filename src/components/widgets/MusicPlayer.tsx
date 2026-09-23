@@ -383,7 +383,7 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
           <small>
             {current
               ? `${current.artist}${current.kind === 'local' ? ' · berkas lokal' : ''}`
-              : 'Alt+P putar/jeda · Alt+panah ganti lagu · Alt+M bisukan'}
+              : 'Belum ada lagu — tempel tautan YouTube atau impor berkas audio'}
           </small>
           {yt.error && <em className="music-error">{yt.error}</em>}
         </div>
@@ -508,6 +508,10 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
             <p className="music-note">
               Lagu YouTube diputar lewat pemutar resmi YouTube (tidak diunduh). Berkas audio Anda tersimpan di
               peramban ini dan bisa disimpan ulang ke komputer atau dihapus.
+            </p>
+            <p className="music-note">
+              Pintasan: <kbd>Alt</kbd>+<kbd>P</kbd> putar/jeda · <kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd> ganti lagu ·
+              <kbd>Alt</kbd>+<kbd>M</kbd> bisukan.
             </p>
           </div>
         )}

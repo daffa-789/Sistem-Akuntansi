@@ -2,12 +2,13 @@ import React, { useState } from 'react'
 import {
   ArrowUpRight, CircleDollarSign, Landmark, ReceiptText, RefreshCw, WalletCards, LucideIcon
 } from 'lucide-react'
-import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Button } from '../ui/Button.js'
 import { Badge } from '../ui/Badge.js'
 import { PageLoading } from '../ui/PageLoading.js'
 import { ErrorNotice } from '../ui/ErrorNotice.js'
 import { useLoad } from '../../hooks/useLoad.js'
+import { useThemeTokens } from '../../hooks/useThemeTokens.js'
 import { request } from '../../api.js'
 import { apiPath, dateLabel, firstDay, money, today } from '../../utils/formatters.js'
 
@@ -20,8 +21,44 @@ export interface DashboardData {
   netIncome: number
 }
 
+const CHART_TOKENS = ['--brand-500', '--warn', '--credit', '--line', '--ink-3', '--ink-4', '--surface-3']
+
+// "10 jt", "850 rb", "1,2 M" — sumbu Y tidak muat kalau menulis angka penuh.
+function shortNumber(value: number): string {
+  const n = Number(value) || 0
+  const abs = Math.abs(n)
+  const fmt = (v: number, digits: number) =>
+    v.toFixed(digits).replace(/\.0+$/, '').replace('.', ',')
+  if (abs >= 1e9) return `${fmt(n / 1e9, 1)} M`
+  if (abs >= 1e6) return `${fmt(n / 1e6, abs >= 1e7 ? 0 : 1)} jt`
+  if (abs >= 1e3) return `${fmt(n / 1e3, 0)} rb`
+  return String(Math.round(n))
+}
+
+interface TipProps {
+  active?: boolean
+  payload?: { value?: number | string }[]
+  label?: string
+}
+
+function ChartTip({ active, payload, label }: TipProps): React.JSX.Element | null {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="chart-tip">
+      <span>{label}</span>
+      <strong>{money(Number(payload[0].value) || 0)}</strong>
+    </div>
+  )
+}
+
 export function DashboardView(): React.JSX.Element {
   const [range, setRange] = useState({ from: firstDay(), to: today() })
+  const t = useThemeTokens(CHART_TOKENS)
+  const barColor: Record<string, string> = {
+    Pendapatan: t['--brand-500'],
+    Beban: t['--warn'],
+    Laba: t['--credit']
+  }
   const { data, loading, error, reload } = useLoad<{ data: DashboardData }>(
     () => request(apiPath('/reports/dashboard', range)),
     [range.from, range.to]
@@ -103,21 +140,41 @@ export function DashboardView(): React.JSX.Element {
           <section className="panel" aria-label="Grafik Kinerja Keuangan">
             <h2 className="panel-title">Kinerja Periode Ini</h2>
             <p className="panel-subtitle">Perbandingan pendapatan operasional, beban, dan laba bersih.</p>
-            <div style={{ height: 270 }}>
+            <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chart}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -6 }} barCategoryGap="34%">
+                  <CartesianGrid stroke={t['--line']} strokeDasharray="4 4" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: t['--ink-3'], fontSize: 12 }}
+                    tickLine={false}
+                    axisLine={{ stroke: t['--line'] }}
+                  />
                   <YAxis
-                    tickFormatter={(val) => `${Math.round(val / 1000000)} jt`}
+                    width={56}
+                    tick={{ fill: t['--ink-4'], fontSize: 11 }}
+                    tickFormatter={shortNumber}
                     tickLine={false}
                     axisLine={false}
                   />
-                  <Tooltip formatter={(val: any) => money(val)} />
-                  <Bar dataKey="value" fill="#168b55" radius={[7, 7, 0, 0]} />
+                  <Tooltip cursor={{ fill: t['--surface-3'] }} content={<ChartTip />} />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={84}>
+                    {chart.map((row) => (
+                      <Cell key={row.name} fill={barColor[row.name] || t['--brand-500']} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <ul className="chart-legend">
+              {chart.map((row) => (
+                <li key={row.name}>
+                  <i style={{ background: barColor[row.name] || t['--brand-500'] }} aria-hidden="true" />
+                  {row.name}
+                  <strong>{money(row.value)}</strong>
+                </li>
+              ))}
+            </ul>
           </section>
 
           <section className="panel" aria-label="Informasi Pembukuan">

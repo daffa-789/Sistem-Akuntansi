@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { CheckCircle2, Download, FileSpreadsheet } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet } from 'lucide-react'
 import { Modal } from '../ui/Modal.js'
 import { Button } from '../ui/Button.js'
 import { ErrorNotice } from '../ui/ErrorNotice.js'
@@ -95,7 +95,7 @@ export function ExcelImportModal({ onClose, notify, onImported }: ExcelImportMod
       }
     >
       <div style={{ marginBottom: 16 }}>
-        <p style={{ margin: '0 0 10px', fontSize: 13, color: '#64748b' }}>
+        <p className="muted" style={{ margin: '0 0 10px', fontSize: 13 }}>
           Unggah file Excel (<strong>.xlsx</strong>) yang berisi daftar transaksi jurnal. Format harus sesuai
           dengan template standar Finova (kolom Tanggal, No. Bukti, Kode Akun, Debit, Kredit, Keterangan).
         </p>
@@ -121,37 +121,28 @@ export function ExcelImportModal({ onClose, notify, onImported }: ExcelImportMod
             aria-label="Pilih berkas Excel (.xlsx)"
           />
           {file && (
-            <div style={{ marginTop: 10, fontWeight: 700, color: '#0e7145', fontSize: 13 }}>
+            <div className="t-brand" style={{ marginTop: 10, fontWeight: 700, fontSize: 13 }}>
               Berkas terpilih: {file.name} ({(file.size / 1024).toFixed(1)} KB)
             </div>
           )}
         </div>
       ) : (
         <div>
-          <div
-            style={{
-              padding: 12,
-              borderRadius: 10,
-              background: preview.valid ? '#f0fdf4' : '#fff1f2',
-              border: `1px solid ${preview.valid ? '#bbf7d0' : '#fecdd3'}`,
-              marginBottom: 14
-            }}
-          >
-            <strong>
+          <div className={preview.valid ? 'verdict boxed' : 'verdict boxed is-off'}>
+            {preview.valid ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+            <span>
               {preview.valid
-                ? `✓ Siap diimpor: ${preview.entries?.length || 0} transaksi jurnal valid ditemukan (${preview.totalRows} baris)`
-                : `⚠️ Terdapat ${preview.errors?.length || 0} kesalahan validasi pada berkas Excel Anda`}
-            </strong>
+                ? `Siap diimpor: ${preview.entries?.length || 0} transaksi jurnal valid ditemukan (${preview.totalRows} baris)`
+                : `Terdapat ${preview.errors?.length || 0} kesalahan validasi pada berkas Excel Anda`}
+            </span>
           </div>
 
           {preview.errors?.length > 0 && (
-            <div style={{ maxHeight: 180, overflow: 'auto', marginBottom: 14 }}>
-              <ul style={{ margin: 0, paddingLeft: 20, color: '#b91c1c', fontSize: 12 }}>
-                {preview.errors.map((err, idx) => (
-                  <li key={idx}>{err}</li>
-                ))}
-              </ul>
-            </div>
+            <ul className="import-errors">
+              {preview.errors.map((err, idx) => (
+                <li key={idx}>{err}</li>
+              ))}
+            </ul>
           )}
 
           {preview.entries?.length > 0 && (

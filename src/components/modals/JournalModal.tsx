@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlertTriangle,
+  ArrowDownToLine,
   ArrowRightLeft,
+  ArrowUpFromLine,
   CheckCircle2,
   Copy,
   History,
   Layers,
+  Lightbulb,
   Lock,
   Plus,
   Save,
@@ -477,52 +481,26 @@ export function JournalModal({
         )}
 
         {readOnly && (
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              alignItems: 'center',
-              marginBottom: 14,
-              padding: '10px 14px',
-              borderRadius: 8,
-              background: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              color: '#334155',
-              fontSize: 13
-            }}
-          >
+          <div className="notice">
             <Lock size={15} aria-hidden="true" />
             Jurnal terposting tidak dapat diubah agar jejak audit tetap sah. Gunakan Jurnal Pembalik untuk mengoreksi.
           </div>
         )}
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: mode === 'quick' ? '#ecfdf5' : '#f0f9ff',
-            border: `1px solid ${mode === 'quick' ? '#a7f3d0' : '#bae6fd'}`,
-            borderRadius: 8,
-            padding: '8px 14px',
-            marginBottom: 16
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-            <span style={{ fontWeight: 700, color: mode === 'quick' ? '#065f46' : '#0369a1' }}>
-              {mode === 'quick' ? '⚡ Mode Cepat (2-Akun Otomatis Seimbang)' : '📋 Mode Multi-Baris (Jurnal Majemuk)'}
-            </span>
-            <span style={{ fontSize: 12, color: '#64748b' }}>
-              {mode === 'quick' ? '— Cocok untuk 90% transaksi harian' : '— Untuk transaksi dengan >2 akun'}
-            </span>
+        <div className={mode === 'quick' ? 'mode-bar' : 'mode-bar is-multi'}>
+          <div className="mode-bar-text">
+            <strong>
+              {mode === 'quick' ? <Zap size={14} /> : <Layers size={14} />}
+              {mode === 'quick' ? 'Mode Cepat (2 akun, otomatis seimbang)' : 'Mode Multi-Baris (jurnal majemuk)'}
+            </strong>
+            <em>{mode === 'quick' ? 'cocok untuk 90% transaksi harian' : 'untuk transaksi dengan lebih dari dua akun'}</em>
           </div>
           <button
             type="button"
             onClick={() => switchMode(mode === 'quick' ? 'multi' : 'quick')}
             disabled={readOnly || quickCannotHoldThis}
             title={quickCannotHoldThis ? 'Jurnal majemuk lebih dari dua baris tidak bisa dialihkan ke Mode Cepat' : 'Ganti mode input'}
-            className="button button-secondary"
-            style={{ fontSize: 11, padding: '4px 10px', height: 'auto' }}
+            className="button button-secondary chip"
           >
             <ArrowRightLeft size={12} />
             {mode === 'quick' ? 'Ganti ke Mode Multi-Baris' : 'Ganti ke Mode Cepat'}
@@ -580,27 +558,13 @@ export function JournalModal({
 
         {mode === 'quick' ? (
           <div style={{ marginTop: 18 }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: 16,
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                padding: 16
-              }}
-            >
+            <div className="quick-panel">
               <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label htmlFor="quick-debit-account" style={{ color: '#15803d', fontWeight: 800 }}>
-                    📥 AKUN DEBIT (Menerima / Bertambah)
+                <div className="quick-top">
+                  <label htmlFor="quick-debit-account" className="quick-label">
+                    <ArrowDownToLine size={13} /> Akun Debit (menerima / bertambah)
                   </label>
-                  {selectedDebitAccount && (
-                    <span style={{ fontSize: 11, background: '#dcfce7', color: '#166534', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
-                      {GL[selectedDebitAccount.account_group] || selectedDebitAccount.account_group}
-                    </span>
-                  )}
+                  {selectedDebitAccount && <span className="quick-tag">{GL[selectedDebitAccount.account_group] || selectedDebitAccount.account_group}</span>}
                 </div>
                 <AccountPicker
                   id="quick-debit-account"
@@ -618,26 +582,22 @@ export function JournalModal({
                   onSelected={readOnly ? undefined : () => document.getElementById('quick-credit-account')?.focus()}
                 />
                 {selectedDebitAccount ? (
-                  <div style={{ marginTop: 6, fontSize: 11, color: '#15803d', background: '#f0fdf4', padding: '6px 8px', borderRadius: 6, border: '1px solid #dcfce7' }}>
-                    💡 {getAlereHint(selectedDebitAccount, 'DEBIT')}
+                  <div className="quick-hint">
+                    <Lightbulb size={12} /> {getAlereHint(selectedDebitAccount, 'DEBIT')}
                   </div>
                 ) : (
-                  <div style={{ marginTop: 4, fontSize: 11, color: '#64748b' }}>
+                  <div className="quick-note">
                     {vErrors.debitAccount || 'Pilih akun yang menerima uang/aset atau akun beban.'}
                   </div>
                 )}
               </div>
 
               <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label htmlFor="quick-credit-account" style={{ color: '#0369a1', fontWeight: 800 }}>
-                    📤 AKUN KREDIT (Sumber / Berkurang / Diakui)
+                <div className="quick-top">
+                  <label htmlFor="quick-credit-account" className="quick-label credit">
+                    <ArrowUpFromLine size={13} /> Akun Kredit (sumber / berkurang / diakui)
                   </label>
-                  {selectedCreditAccount && (
-                    <span style={{ fontSize: 11, background: '#e0f2fe', color: '#075985', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
-                      {GL[selectedCreditAccount.account_group] || selectedCreditAccount.account_group}
-                    </span>
-                  )}
+                  {selectedCreditAccount && <span className="quick-tag credit">{GL[selectedCreditAccount.account_group] || selectedCreditAccount.account_group}</span>}
                 </div>
                 <AccountPicker
                   id="quick-credit-account"
@@ -655,11 +615,11 @@ export function JournalModal({
                   onSelected={readOnly ? undefined : () => document.getElementById('quick-amount')?.focus()}
                 />
                 {selectedCreditAccount ? (
-                  <div style={{ marginTop: 6, fontSize: 11, color: '#0369a1', background: '#f0f9ff', padding: '6px 8px', borderRadius: 6, border: '1px solid #e0f2fe' }}>
-                    💡 {getAlereHint(selectedCreditAccount, 'KREDIT')}
+                  <div className="quick-hint credit">
+                    <Lightbulb size={12} /> {getAlereHint(selectedCreditAccount, 'KREDIT')}
                   </div>
                 ) : (
-                  <div style={{ marginTop: 4, fontSize: 11, color: '#64748b' }}>
+                  <div className="quick-note">
                     {vErrors.creditAccount || 'Pilih akun sumber kas keluar, pendapatan yang diakui, atau utang.'}
                   </div>
                 )}
@@ -683,7 +643,7 @@ export function JournalModal({
                 }}
               />
               {quickDebitId && quickCreditId && Number(quickAmount) > 0 && (
-                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#16a34a' }}>
+                <div className="quick-ok">
                   <CheckCircle2 size={16} /> Otomatis Seimbang: Debit {money(Number(quickAmount))} = Kredit{' '}
                   {money(Number(quickAmount))}
                 </div>
@@ -799,9 +759,9 @@ export function JournalModal({
               <Button
                 variant="secondary"
                 small
+                className="warn"
                 disabled={readOnly || balanced}
                 onClick={autoBalance}
-                style={{ background: '#fffbeb', borderColor: '#fef3c7', color: '#b45309' }}
               >
                 <Zap size={14} /> Auto-Balance (Seimbangkan)
               </Button>
@@ -818,40 +778,24 @@ export function JournalModal({
           </div>
         )}
 
-        <div
-          style={{
-            marginTop: 16,
-            background: balanced ? '#f0fdf4' : '#fff1f2',
-            border: `1px solid ${balanced ? '#bbf7d0' : '#fecdd3'}`,
-            borderRadius: 10,
-            padding: '12px 16px'
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 12,
-              fontSize: 13
-            }}
-          >
-            <div>
+        <div className={balanced ? 'balance-box' : 'balance-box is-off'}>
+          <div className="balance-row">
+            <div className="balance-totals">
               <span>
                 Total Debit: <strong className={balanced ? 'good' : 'bad'}>{money(totals.debit)}</strong>
               </span>
-              <span style={{ margin: '0 12px', color: '#94a3b8' }}>|</span>
+              <span className="balance-sep">|</span>
               <span>
                 Total Kredit: <strong className={balanced ? 'good' : 'bad'}>{money(totals.credit)}</strong>
               </span>
             </div>
-            <div style={{ fontWeight: 700 }}>
+            <div className="balance-state">
               {balanced ? (
-                <span style={{ color: '#16a34a' }}>✓ Jurnal Seimbang (Debit = Kredit)!</span>
+                <span className="t-good"><CheckCircle2 size={14} /> Jurnal seimbang (debit = kredit)</span>
               ) : (
-                <span style={{ color: '#e11d48' }}>
-                  {diff > 0 ? `⚠️ Sisi Kredit Kurang: ${money(Math.abs(diff))}` : `⚠️ Sisi Debit Kurang: ${money(Math.abs(diff))}`}
+                <span className="t-bad">
+                  <AlertTriangle size={14} />
+                  {diff > 0 ? `Sisi kredit kurang ${money(Math.abs(diff))}` : `Sisi debit kurang ${money(Math.abs(diff))}`}
                 </span>
               )}
             </div>
@@ -859,8 +803,9 @@ export function JournalModal({
         </div>
 
         <p className="shortcut-hint">
-          Enter pindah baris &middot; Shift+Enter kembali &middot; Ctrl+D salin baris &middot; Shift+D / Shift+K pindah sisi
-          &middot; Ctrl+S simpan draft &middot; Ctrl+Enter simpan &amp; posting
+          {mode === 'quick'
+            ? 'Ketik kode lalu tekan Enter untuk berpindah kolom · Ctrl+S simpan draft · Ctrl+Enter simpan & posting'
+            : 'Enter pindah baris · Shift+Enter kembali · Ctrl+D salin baris · Shift+D / Shift+K pindah sisi · Ctrl+S simpan draft · Ctrl+Enter simpan & posting'}
         </p>
 
         <button type="submit" className="sr-only" disabled={!canSave} tabIndex={-1} aria-hidden="true">

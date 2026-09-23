@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Download, Printer } from 'lucide-react'
 import { Button } from '../ui/Button.js'
+import { PrintHeader, PrintSignatures } from '../ui/PrintFrame.js'
 import { GL } from '../../utils/formatters.js'
 import { exportAccountsFile } from '../../services/downloads.js'
 import { Account, AccountGroup, Company } from '../../../shared/types.js'
@@ -42,6 +43,7 @@ export function AccountsView({ accounts = [], company, notify }: AccountsViewPro
 
   return (
     <>
+      <PrintHeader title='Bagan Akun (Chart of Accounts)' company={company} />
       <div className="toolbar no-print">
         <div>
           <h1 className="page-title">Bagan Akun (Chart of Accounts)</h1>
@@ -146,6 +148,7 @@ export function AccountsView({ accounts = [], company, notify }: AccountsViewPro
           </table>
         </div>
       </section>
+      <PrintSignatures />
     </>
   )
 }

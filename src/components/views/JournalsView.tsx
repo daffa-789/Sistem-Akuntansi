@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowUpDown,
   BarChart3,
   CheckCircle2,
@@ -108,6 +109,51 @@ export interface JournalReportData {
 }
 
 const isPosted = (entry: ReportEntry): boolean => (entry.status || 'POSTED') === 'POSTED'
+
+/** Satu kolom rekapitulasi (sisi debit atau kredit) untuk panel Rekap Jurnal. */
+function RecapSide({ side, title, rows, total }: {
+  side: 'debit' | 'credit'
+  title: string
+  rows: RecapAccountItem[]
+  total: number
+}): React.JSX.Element {
+  return (
+    <div className="recap-card">
+      <div className={`recap-band recap-${side}`}>{title}</div>
+      <div className="table-wrap">
+        <table className="recap-table">
+          <thead>
+            <tr>
+              <th className="col-code">Kode</th>
+              <th>Nama Akun</th>
+              <th className="col-num">Jumlah (Rp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.code}>
+                <td><strong>{r.code}</strong></td>
+                <td>{r.name}</td>
+                <td className={`amt t-${side}`}>{money(r.amount)}</td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr>
+                <td colSpan={3} className="recap-empty">Tidak ada transaksi {side}</td>
+              </tr>
+            )}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={2}>Total {side}</td>
+              <td className={`amt t-${side}`}>{money(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
 
 export function JournalsView({ accounts = [], company, notify, filters, onFilters }: JournalsViewProps): React.JSX.Element {
   const [showRecap, setShowRecap] = useState<boolean>(false)
@@ -373,90 +419,67 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
       </div>
 
       {/* 2. Key Accounting Summary Metrics */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 12,
-          marginBottom: 16
-        }}
-      >
-        <div className="panel" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>TOTAL TRANSAKSI</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginTop: 4 }}>
-            {totals.count} <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Jurnal</span>
-          </div>
-          <div style={{ fontSize: 11, color: totals.isBalanced ? '#16a34a' : '#e11d48', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div className="kpi-grid">
+        <div className="panel kpi">
+          <div className="kpi-label">Total Transaksi</div>
+          <div className="kpi-value">{totals.count} <small>Jurnal</small></div>
+          <div className={`kpi-flag ${totals.isBalanced ? 't-good' : 't-bad'}`}>
             <CheckCircle2 size={12} /> Status: {totals.isBalanced ? 'Seimbang (Balanced)' : 'Periksa Selisih'}
           </div>
           {draftCount > 0 && (
-            <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
+            <div className="kpi-note t-warn">
               {draftCount} draft tidak dihitung dalam total &amp; rekapitulasi
             </div>
           )}
         </div>
 
-        <div className="panel" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d' }}>TOTAL DEBIT</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#15803d', marginTop: 4 }}>
-            {money(totals.debit)}
-          </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Akumulasi sisi Debit</div>
+        <div className="panel kpi">
+          <div className="kpi-label t-debit">Total Debit</div>
+          <div className="kpi-value t-debit">{money(totals.debit)}</div>
+          <div className="kpi-note">Akumulasi sisi Debit</div>
         </div>
 
-        <div className="panel" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#0369a1' }}>TOTAL KREDIT</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#0369a1', marginTop: 4 }}>
-            {money(totals.credit)}
-          </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Akumulasi sisi Kredit</div>
+        <div className="panel kpi">
+          <div className="kpi-label t-credit">Total Kredit</div>
+          <div className="kpi-value t-credit">{money(totals.credit)}</div>
+          <div className="kpi-note">Akumulasi sisi Kredit</div>
         </div>
 
-        <div className="panel" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#b45309' }}>MUTASI KAS & BANK</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginTop: 4 }}>
-            +{money(totals.cashIn)}
-          </div>
-          <div style={{ fontSize: 11, color: '#e11d48', marginTop: 1 }}>
-            -{money(totals.cashOut)} (Net: {money(totals.netCash)})
-          </div>
+        <div className="panel kpi">
+          <div className="kpi-label t-warn">Mutasi Kas &amp; Bank</div>
+          <div className="kpi-value" style={{ fontSize: 17 }}>+{money(totals.cashIn)}</div>
+          <div className="kpi-note t-bad">-{money(totals.cashOut)} (Net: {money(totals.netCash)})</div>
         </div>
       </div>
 
       {/* 3. Comprehensive Filter & Search Bar */}
-      <div className="panel" style={{ marginBottom: 16, padding: '14px 18px' }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginRight: 4 }}>
-            Pilih Periode:
-          </span>
+      <div className="panel filter-panel">
+        <div className="filter-bar">
+          <span className="filter-lead">Pilih Periode:</span>
           <button
             type="button"
-            className="button button-secondary"
-            style={{ fontSize: 11, padding: '4px 10px', height: 'auto' }}
+            className="button button-secondary chip"
             onClick={() => setQuickRange('today')}
           >
             Hari Ini
           </button>
           <button
             type="button"
-            className="button button-secondary"
-            style={{ fontSize: 11, padding: '4px 10px', height: 'auto' }}
+            className="button button-secondary chip"
             onClick={() => setQuickRange('this-month')}
           >
             Bulan Ini
           </button>
           <button
             type="button"
-            className="button button-secondary"
-            style={{ fontSize: 11, padding: '4px 10px', height: 'auto' }}
+            className="button button-secondary chip"
             onClick={() => setQuickRange('last-month')}
           >
             Bulan Lalu
           </button>
           <button
             type="button"
-            className="button button-secondary"
-            style={{ fontSize: 11, padding: '4px 10px', height: 'auto' }}
+            className="button button-secondary chip"
             onClick={() => setQuickRange('this-year')}
           >
             Tahun Ini
@@ -518,35 +541,22 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
           </div>
 
           <div className="field" style={{ flex: 1, minWidth: 200 }}>
-            <label htmlFor="journals-search">PENCARIAN CEPAT</label>
-            <div style={{ position: 'relative' }}>
+            <label htmlFor="journals-search">Pencarian cepat</label>
+            <div className="search-wrap">
+              <Search className="search-lead" size={15} />
               <input
                 id="journals-search"
-                className="input"
-                style={{ paddingLeft: 32 }}
+                className="input has-lead"
                 placeholder="Cari no. bukti, keterangan, akun, memo…"
                 value={filters.search}
                 onChange={(e) => patch({ search: e.target.value })}
               />
-              <Search
-                size={15}
-                style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
-              />
               {filters.search && (
                 <button
                   type="button"
+                  className="search-clear"
                   aria-label="Kosongkan pencarian"
                   onClick={() => patch({ search: '' })}
-                  style={{
-                    position: 'absolute',
-                    right: 10,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: '#94a3b8'
-                  }}
                 >
                   <X size={14} />
                 </button>
@@ -562,114 +572,22 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
 
       {/* 4. Rekapitulasi Jurnal (Collapsible Section, fully responsive & never clipped) */}
       {showRecap && (
-        <section className="panel" style={{ marginBottom: 16, background: '#f8fafc', border: '1px solid #cbd5e1' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <section className="panel recap-panel">
+          <div className="recap-head">
             <div>
-              <h2 style={{ fontSize: 14, fontWeight: 800, margin: 0, color: '#1e293b' }}>
-                📊 REKAPITULASI JURNAL UMUM
-              </h2>
-              <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+              <h2><BarChart3 size={15} /> Rekapitulasi Jurnal Umum</h2>
+              <p className="muted">
                 Ringkasan total per akun Debit vs Kredit sebelum diposting ke Buku Besar.
               </p>
             </div>
-            <button
-              type="button"
-              className="button button-secondary"
-              style={{ fontSize: 11, padding: '4px 8px' }}
-              onClick={() => setShowRecap(false)}
-            >
+            <button type="button" className="button button-secondary chip" onClick={() => setShowRecap(false)}>
               <X size={14} /> Tutup Rekap
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-            {/* Sisi Debit */}
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-              <div style={{ background: '#ecfdf5', padding: '8px 12px', fontWeight: 700, fontSize: 12, color: '#065f46', borderBottom: '1px solid #d1fae5' }}>
-                AKUN SISI DEBIT
-              </div>
-              <div style={{ overflowX: 'auto', width: '100%' }}>
-                <table style={{ width: '100%', minWidth: 0, borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#fafcfb', borderBottom: '1px solid #edf0f0', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', width: '20%' }}>Kode</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', width: '45%' }}>Nama Akun</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'right', width: '35%' }}>Jumlah (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {liveRecap.debits.map((d) => (
-                      <tr key={d.code} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px 10px' }}><strong>{d.code}</strong></td>
-                        <td style={{ padding: '8px 10px' }}>{d.name}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#15803d', fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                          {money(d.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                    {!liveRecap.debits.length && (
-                      <tr>
-                        <td colSpan={3} style={{ padding: '12px 10px', textAlign: 'center', color: '#94a3b8' }}>
-                          Tidak ada transaksi debit
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
-                      <td colSpan={2} style={{ padding: '8px 10px' }}>TOTAL DEBIT</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', color: '#15803d', fontSize: 13, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                        {money(liveRecap.totalDebit)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-
-            {/* Sisi Kredit */}
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-              <div style={{ background: '#f0f9ff', padding: '8px 12px', fontWeight: 700, fontSize: 12, color: '#0369a1', borderBottom: '1px solid #e0f2fe' }}>
-                AKUN SISI KREDIT
-              </div>
-              <div style={{ overflowX: 'auto', width: '100%' }}>
-                <table style={{ width: '100%', minWidth: 0, borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#fafcfb', borderBottom: '1px solid #edf0f0', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', width: '20%' }}>Kode</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', width: '45%' }}>Nama Akun</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'right', width: '35%' }}>Jumlah (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {liveRecap.credits.map((c) => (
-                      <tr key={c.code} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px 10px' }}><strong>{c.code}</strong></td>
-                        <td style={{ padding: '8px 10px' }}>{c.name}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#0369a1', fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                          {money(c.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                    {!liveRecap.credits.length && (
-                      <tr>
-                        <td colSpan={3} style={{ padding: '12px 10px', textAlign: 'center', color: '#94a3b8' }}>
-                          Tidak ada transaksi kredit
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
-                      <td colSpan={2} style={{ padding: '8px 10px' }}>TOTAL KREDIT</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', color: '#0369a1', fontSize: 13, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                        {money(liveRecap.totalCredit)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+          <div className="recap-cols">
+            <RecapSide side="debit" title="Akun sisi Debit" rows={liveRecap.debits} total={liveRecap.totalDebit} />
+            <RecapSide side="credit" title="Akun sisi Kredit" rows={liveRecap.credits} total={liveRecap.totalCredit} />
           </div>
         </section>
       )}
@@ -707,10 +625,7 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
                         return (
                           <tr
                             key={`${e.id}-${lineIdx}`}
-                            style={{
-                              borderTop: isFirstLine ? '1px solid #cbd5e1' : 'none',
-                              background: isDraft ? '#fffbeb' : undefined
-                            }}
+                            className={`${isFirstLine ? 'entry-start' : ''} ${isDraft ? 'entry-draft' : ''}`}
                           >
                             {/* Tanggal (tampil di baris pertama transaksi) */}
                             <td>{isFirstLine ? dateLabel(e.entry_date) : ''}</td>
@@ -719,9 +634,9 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
                             <td>
                               {isFirstLine ? (
                                 <div>
-                                  <strong style={{ color: '#0f172a' }}>{e.voucher_no}</strong>
+                                  <strong>{e.voucher_no}</strong>
                                   {e.source && e.source !== 'MANUAL' && (
-                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                                    <div className="journal-source">
                                       {SOURCE_LABEL[e.source] || e.source}
                                     </div>
                                   )}
@@ -730,64 +645,39 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
                             </td>
 
                             {/* Nama Akun & Memo */}
-                            <td style={{ paddingLeft: isCredit ? 32 : 12 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {isCredit && (
-                                  <span style={{ color: '#0284c7', fontWeight: 700, fontSize: 13 }}>↳</span>
-                                )}
-                                <span
-                                  style={{
-                                    fontWeight: isCredit ? 500 : 700,
-                                    color: isCredit ? '#0369a1' : '#0f172a'
-                                  }}
-                                >
-                                  {l.account_name}
-                                </span>
+                            <td>
+                              <div className={isCredit ? 'journal-line is-credit' : 'journal-line'}>
+                                {l.account_name}
                               </div>
 
                               {/* Memo per baris */}
                               {l.memo && l.memo !== e.description && (
-                                <div style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic', marginTop: 2, paddingLeft: isCredit ? 18 : 0 }}>
-                                  ({l.memo})
-                                </div>
+                                <div className="journal-memo-text">{l.memo}</div>
                               )}
 
                               {/* Keterangan umum transaksi (di bawah baris terakhir) */}
                               {lineIdx === e.lines.length - 1 && e.description && (
-                                <div
-                                  style={{
-                                    fontSize: 11,
-                                    color: '#475569',
-                                    fontStyle: 'italic',
-                                    marginTop: 4,
-                                    paddingLeft: 8,
-                                    borderLeft: '2px solid #cbd5e1'
-                                  }}
-                                >
-                                  Ket: {e.description}
-                                </div>
+                                <div className="journal-desc">Ket: {e.description}</div>
                               )}
                             </td>
 
                             {/* Ref (Kode Akun) */}
-                            <td style={{ textAlign: 'center', color: '#64748b', fontSize: 12 }}>
-                              {l.code}
-                            </td>
+                            <td className="ref">{l.code}</td>
 
                             {/* Nominal Debit */}
-                            <td className="number" style={{ fontWeight: 600, color: '#15803d' }}>
+                            <td className="number t-debit">
                               {Number(l.debit) > 0 ? money(l.debit) : ''}
                             </td>
 
                             {/* Nominal Kredit */}
-                            <td className="number" style={{ fontWeight: 600, color: '#0369a1' }}>
+                            <td className="number t-credit">
                               {Number(l.credit) > 0 ? money(l.credit) : ''}
                             </td>
 
                             {/* Status */}
-                            <td style={{ textAlign: 'center' }}>
+                            <td className="cell-center">
                               {isFirstLine ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                                <div className="cell-stack">
                                   <Badge status={e.status || 'POSTED'} />
                                   {e.reversed && (
                                     <span title="Sudah dibalik oleh jurnal pembalik">
@@ -799,9 +689,9 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
                             </td>
 
                             {/* Aksi: draft boleh diubah/dihapus, terposting dikoreksi dengan pembalik */}
-                            <td style={{ textAlign: 'center' }}>
+                            <td className="cell-center">
                               {isFirstLine ? (
-                                <div style={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                                <div className="cell-actions">
                                   {isDraft ? (
                                     <>
                                       <button
@@ -815,8 +705,7 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
                                       </button>
                                       <button
                                         type="button"
-                                        className="icon-button"
-                                        style={{ color: '#16a34a' }}
+                                        className="icon-button t-good"
                                         title={`Posting ${e.voucher_no} ke buku besar`}
                                         aria-label={`Posting ${e.voucher_no}`}
                                         onClick={() => postDraft(e.id, e.voucher_no)}
@@ -825,8 +714,7 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
                                       </button>
                                       <button
                                         type="button"
-                                        className="icon-button"
-                                        style={{ color: '#e11d48' }}
+                                        className="icon-button t-bad"
                                         title={`Hapus draft ${e.voucher_no}`}
                                         aria-label={`Hapus draft ${e.voucher_no}`}
                                         onClick={() => deleteJournal(e.id, e.voucher_no)}
@@ -848,8 +736,7 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
                                       {!e.reversed && (
                                         <button
                                           type="button"
-                                          className="icon-button"
-                                          style={{ color: '#b45309' }}
+                                          className="icon-button t-warn"
                                           title={`Buat jurnal pembalik untuk ${e.voucher_no}`}
                                           aria-label={`Jurnal pembalik ${e.voucher_no}`}
                                           onClick={() => setReverseTarget(e)}
@@ -881,30 +768,22 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
 
               {/* Baris Total Garis Ganda Standar Akuntansi */}
               <tfoot>
-                <tr
-                  style={{
-                    borderTop: '2px solid #0f172a',
-                    borderBottom: '4px double #0f172a',
-                    background: '#f8fafc',
-                    fontWeight: 800,
-                    fontSize: 14
-                  }}
-                >
-                  <td colSpan={2} style={{ textAlign: 'center' }}>TOTAL JURNAL UMUM</td>
+                <tr className="accounting-double-line">
+                  <td colSpan={2} className="cell-center">Total Jurnal Umum</td>
                   <td>
                     {totals.isBalanced ? (
-                      <span style={{ color: '#16a34a', fontSize: 12, fontWeight: 700 }}>
-                        ✓ SEIMBANG (BALANCED)
+                      <span className="balance-flag t-good">
+                        <CheckCircle2 size={13} /> Seimbang (Balanced)
                       </span>
                     ) : (
-                      <span style={{ color: '#e11d48', fontSize: 12, fontWeight: 700 }}>
-                        ⚠️ TIDAK SEIMBANG!
+                      <span className="balance-flag t-bad">
+                        <AlertTriangle size={13} /> Tidak seimbang — periksa kembali
                       </span>
                     )}
                   </td>
                   <td />
-                  <td className="number" style={{ color: '#15803d' }}>{money(totals.debit)}</td>
-                  <td className="number" style={{ color: '#0369a1' }}>{money(totals.credit)}</td>
+                  <td className="number t-debit">{money(totals.debit)}</td>
+                  <td className="number t-credit">{money(totals.credit)}</td>
                   <td />
                   <td />
                 </tr>
