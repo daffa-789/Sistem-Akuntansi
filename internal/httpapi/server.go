@@ -133,7 +133,13 @@ func (s *Server) notFound(w http.ResponseWriter, _ *http.Request) error {
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) error {
-	return writeJSON(w, http.StatusOK, map[string]any{"ok": true, "service": "finova-api", "runtime": "go"})
+	version := s.cfg.Version
+	if version == "" {
+		version = "dev"
+	}
+	return writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "service": "finova-api", "runtime": "go", "version": version,
+	})
 }
 
 // withCORS mengizinkan asal permintaan dari Vite dev server (mode pengembangan).

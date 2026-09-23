@@ -76,10 +76,18 @@ Sistem-Akuntansi/
 │   ├── web/                # go:embed hasil build frontend + penyimpan berkas SPA (fallback index.html)
 │   └── xlsx/               # Pembuat templat & parser berkas Excel impor (excelize)
 ├── scripts/                # Alat bantu npm
-│   ├── dev.ts              # Menjalankan Go API + Vite HMR bersamaan
-│   ├── build-go.mjs        # `go build` dengan nama biner per sistem operasi
+│   ├── dev.mjs             # Menjalankan Go API + Vite HMR bersamaan
+│   ├── build-go.mjs        # `go build` ramping (-trimpath -s -w) + ikon per OS
+│   ├── make-installer.mjs  # Bangun biner lalu jalankan makensis -> installer .exe
 │   ├── start.mjs           # Menjalankan biner produksi (build bila belum ada)
-│   └── keep-dist.mjs       # Memulihkan penanda internal/web/dist/.gitkeep setelah build
+│   ├── keep-dist.mjs       # Memulihkan penanda internal/web/dist/.gitkeep setelah build
+│   ├── clean.mjs           # Bersihkan hasil build & cache
+│   ├── audit-deps.mjs      # Deteksi paket npm yang tidak terpakai
+│   └── uji-installer.ps1   # Uji pasang-jalankan-lepas installer
+├── tools/
+│   └── genicon/            # Penggambar ikon aplikasi (prosedural, tanpa aset unduhan)
+├── build/windows/          # icon.ico hasil genicon + installer/finova.nsi + catatan.txt
+│                           # (build/bin/ berisi installer jadi, tidak di-commit)
 ├── shared/
 │   └── types.ts            # Tipe domain frontend (cermin kunci JSON dari Go)
 ├── src/                    # Frontend React 18 + TSX
@@ -111,6 +119,7 @@ Sistem-Akuntansi/
 ### Prasyarat
 - **Go 1.22 atau lebih baru** (wajib; modul memakai `http.ServeMux` berpola). Unduh di [go.dev/dl](https://go.dev/dl/), cek dengan `go version`. Tidak perlu GCC/CGO karena driver SQLite murni Go.
 - **Node.js 18+ dan npm** — hanya untuk membangun frontend React dan menjalankan perkakas pengembangan. Biner hasil build berjalan tanpa Node sama sekali.
+- **NSIS 3** (opsional) — hanya bila ingin membuat installer Windows (`npm run installer`).
 
 ### 🚀 1. Mode Pengembangan (Development)
 Frontend Vite (HMR) + backend Go berjalan bersamaan:
@@ -149,6 +158,59 @@ bin\finova.exe version              # info versi & arsitektur biner
 > proyek ini sudah memakai `PORT=5199`. Untuk mengganti sementara:
 > `PORT=5199 npm run dev` — proxy Vite ikut menyesuaikan karena membaca nilai `PORT` yang sama.
 
+### 🧩 3. Installer Windows (satu klik pasang, tanpa hak administrator)
+
+```bash
+npm run installer
+# -> build\bin\Finova-Setup-1.0.0-amd64.exe  (±5,7 MiB)
+```
+
+Perkakas yang dipakai: [NSIS 3](https://nsis.sourceforge.io/Download) (`makensis`). Skripnya ada di
+`build/windows/installer/finova.nsi`; bila NSIS tidak ada di `PATH`, atur `MAKENSIS=C:\...\makensis.exe`
+atau biarkan skrip memakai lokasi pemasangan standar. Ikon aplikasi tidak diunduh dari mana pun —
+digambar oleh `tools/genicon` lalu ditanam ke `.exe` lewat berkas `.syso` (`npm run icon` untuk membuatnya ulang).
+
+Perilaku hasil pasang:
+
+| Hal | Perilaku |
+| --- | --- |
+| Lokasi program | `%LOCALAPPDATA%\Programs\Finova` (per pengguna, tanpa UAC/admin) |
+| Lokasi data | `%APPDATA%\Finova\finova.sqlite` + `finova.log` |
+| Pintasan | Finova, Finova (dengan konsol), Hentikan Finova, Lepas Finova — plus opsi pintasan Desktop |
+| Menjalankan | `finova.exe -app`: tanpa jendela konsol, log ke berkas, peramban terbuka otomatis di `http://localhost:5199` |
+| Klik kedua | Tidak menabrak port: instans baru mendeteksi yang sudah jalan, membuka peramban, lalu keluar |
+| Melepas | Melalui "Tambah atau hapus program" atau `uninstall.exe`; saat senyap (`/S`) data pembukuan selalu dipertahankan, saat interaktif ditanya dulu |
+
+Cara menentukan letak data: bila `go.mod` ada (mode pengembangan) data tetap di `database/` dalam repo;
+kalau tidak (aplikasi terpasang) data pindah ke `%APPDATA%\Finova`. Timpa kapan saja dengan `-db <jalur>`.
+
+Uji pasang-jalankan-lepas secara otomatis:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\uji-installer.ps1
+```
+
+### 📏 Jejak disk (terukur di mesin pengembang)
+
+| Komponen | Ukuran |
+| --- | --- |
+| `bin/finova.exe` (build strip `-s -w`, ikon, frontend tertanam) | 18,3 MiB |
+| `Finova-Setup-1.0.0-amd64.exe` (LZMA solid) | 5,7 MiB |
+| Terpasang (program + uninstaller) | 18,4 MiB |
+| `node_modules` — hanya untuk membangun UI, tidak dipakai saat berjalan | 230,6 MiB |
+
+Build dirampingkan dengan `-trimpath -ldflags "-s -w"` (menghemat ±28% dibanding build biasa:
+24,6 → 17,7 MiB sebelum ikon). Perbandingan era sebelumnya: pemasangan Electron lama menempati
+**570 MiB** di disk, dan server Node membutuhkan `node.exe` (89 MB) saat berjalan.
+
+Untuk membersihkan hasil build dan cache yang selalu bisa dibuat ulang:
+
+```bash
+npm run clean            # hapus bin/, build/bin/, cache .vite
+npm run clean -- --modules   # juga hapus node_modules (perlu `npm install` lagi)
+npm run deps:audit       # daftarkan paket yang tidak terpakai
+```
+
 ---
 
 ## 👤-operator Tunggal (Tanpa Login)
@@ -169,12 +231,16 @@ Satu baris tetap disimpan di tabel `users` sebagai pencatat transaksi karena `jo
 | `npm run build:client` | Build frontend ke `internal/web/dist` (bahan `go:embed`) |
 | `npm run build:server` | `go build` menjadi `bin/finova.exe` |
 | `npm run build` | Keduanya: hasil akhirnya satu biner mandiri |
+| `npm run installer` | Buat installer Windows NSIS di `build/bin/` |
+| `npm run icon` | Gambar ulang ikon aplikasi (`tools/genicon`) |
 | `npm start` | Jalankan biner produksi (dibangun otomatis bila belum ada) |
 | `npm run test:go` | `go test ./...` — unit akuntansi, lapisan DB, integrasi HTTP |
 | `npm run test:ui` | `vitest run` — tes komponen/utilitas frontend |
 | `npm test` | Seluruh tes Go + frontend |
 | `npm run vet` | `go vet ./...` |
 | `npm run typecheck` | Pemeriksaan tipe TypeScript (`tsc --noEmit`) |
+| `npm run deps:audit` | Daftarkan paket npm yang tidak terpakai + 12 terbesar |
+| `npm run clean` | Hapus hasil build & cache yang bisa dibuat ulang |
 | `npm run db:init` | Terapkan skema + seed, lalu keluar |
 | `npm run db:clean` | Kosongkan tabel transaksi (bagan akun & periode dipertahankan) |
 | `go run ./cmd/finova -db ./tmp/uji.sqlite` | Jalankan pada basis data terpisah untuk uji coba |
