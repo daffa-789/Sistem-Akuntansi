@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_TRACKS, buildPlaylistM3u, formatClock, mergeTracks, nextTrackIndex,
-  parseYouTubeInput, sanitizeFileName, trackFromRow, youtubeThumbnail, youtubeWatchUrl
-} from './music.js'
+import { formatClock, nextTrackIndex, parseYouTubeInput } from './music.js'
 
 describe('parseYouTubeInput', () => {
   it('menerima berbagai bentuk tautan YouTube', () => {
@@ -52,65 +49,5 @@ describe('nextTrackIndex', () => {
 
   it('mengembalikan -1 untuk daftar kosong', () => {
     expect(nextTrackIndex({ count: 0, current: 0, repeatOne: false, shuffle: false })).toBe(-1)
-  })
-})
-
-describe('mergeTracks', () => {
-  const yt = (id: string) => trackFromRow({ id: 1, youtube_id: id, title: `Lagu ${id}`, artist: 'Artis', thumbnail_url: youtubeThumbnail(id) })
-
-  it('menggabungkan server + lokal tanpa duplikat', () => {
-    const merged = mergeTracks([yt('aaaaaaaaaaa')], [yt('aaaaaaaaaaa'), yt('bbbbbbbbbbb')], false)
-    expect(merged.map((t) => t.youtubeId)).toEqual(['aaaaaaaaaaa', 'bbbbbbbbbbb'])
-  })
-
-  it('hanya menampilkan saran bawaan saat daftar masih kosong', () => {
-    expect(mergeTracks([], [], true).length).toBe(DEFAULT_TRACKS.length)
-    expect(mergeTracks([yt('ccccccccccc')], [], true).map((t) => t.youtubeId)).toEqual(['ccccccccccc'])
-    expect(mergeTracks([], [], false).length).toBe(0)
-  })
-
-  it('saran tidak pernah menimpa daftar milik pengguna', () => {
-    const saved = trackFromRow({ id: 7, youtube_id: DEFAULT_TRACKS[0].youtubeId, title: 'Versi saya', artist: 'X' })
-    const merged = mergeTracks([saved], [], true)
-    expect(merged).toHaveLength(1)
-    expect(merged[0].title).toBe('Versi saya')
-    expect(merged[0].trackId).toBe(7)
-  })
-})
-
-describe('tautan resmi bawaan', () => {
-  it('semua saran memakai ID video 11 karakter dan URL sampul', () => {
-    expect(DEFAULT_TRACKS.length).toBeGreaterThan(0)
-    for (const track of DEFAULT_TRACKS) {
-      expect(track.youtubeId).toMatch(/^[A-Za-z0-9_-]{11}$/)
-      expect(track.thumbnail).toContain(track.youtubeId as string)
-      expect(youtubeWatchUrl(track.youtubeId as string)).toContain(`watch?v=${track.youtubeId}`)
-    }
-  })
-})
-
-describe('buildPlaylistM3u', () => {
-  it('menulis header M3U, durasi, dan tautan YouTube', () => {
-    const tracks = [trackFromRow({ id: 1, youtube_id: 'dsuJZx24V_A', title: 'Life Will Change', artist: 'Lyn - Topic' })]
-    tracks[0].duration = 262.4
-    const text = buildPlaylistM3u(tracks)
-    expect(text.startsWith('#EXTM3U\n')).toBe(true)
-    expect(text).toContain('#EXTINF:262,Lyn - Topic - Life Will Change')
-    expect(text).toContain('https://www.youtube.com/watch?v=dsuJZx24V_A')
-  })
-
-  it('melewati berkas lokal dan mengembalikan string kosong bila tidak ada tautan', () => {
-    const local = [{ key: 'local:a', kind: 'local' as const, title: 'Punya saya', artist: 'Berkas lokal', localId: 'a' }]
-    expect(buildPlaylistM3u(local)).toBe('')
-    expect(buildPlaylistM3u([])).toBe('')
-  })
-})
-
-describe('sanitizeFileName', () => {
-  it('membuang karakter yang tidak boleh dipakai pada nama berkas', () => {
-    expect(sanitizeFileName('Rivers: In the Desert / Take?')).toBe('Rivers In the Desert Take')
-    expect(sanitizeFileName('   ')).toBe('lagu')
-    expect(sanitizeFileName('')).toBe('lagu')
-    expect(sanitizeFileName('a'.repeat(200)).length).toBeLessThanOrEqual(80)
   })
 })

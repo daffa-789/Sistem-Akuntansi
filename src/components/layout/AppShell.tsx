@@ -1,7 +1,7 @@
 import React, { ReactNode } from 'react'
 import {
   BookOpen, FileBarChart, Landmark, LayoutDashboard,
-  Moon, PenLine, ReceiptText, Search, Sun, LucideIcon
+  ReceiptText, LucideIcon
 } from 'lucide-react'
 import { Company } from '../../../shared/types.js'
 
@@ -19,9 +19,6 @@ export interface AppShellProps {
   company?: Company | null
   route: string
   setRoute: (route: string) => void
-  dark: boolean
-  setDark: (dark: boolean) => void
-  onSearch: () => void
   children: ReactNode
 }
 
@@ -29,9 +26,6 @@ export function AppShell({
   company,
   route,
   setRoute,
-  dark,
-  setDark,
-  onSearch,
   children
 }: AppShellProps): React.JSX.Element {
   const currentItem = NAV_ITEMS.find(([k]) => k === route) || NAV_ITEMS[0]
@@ -156,26 +150,6 @@ export function AppShell({
           <div className="breadcrumb">
             Sistem Akuntansi
             <strong>{currentItem[1]}</strong>
-          </div>
-          <div className="topbar-actions">
-            <button
-              type="button"
-              className="icon-button"
-              title="Cari Akun (Ctrl+K)"
-              aria-label="Cari Akun (Pintasan Ctrl+K)"
-              onClick={onSearch}
-            >
-              <Search size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              title={dark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}
-              aria-label={dark ? 'Mode terang' : 'Mode gelap'}
-              onClick={() => setDark(!dark)}
-            >
-              {dark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-            </button>
           </div>
         </header>
 

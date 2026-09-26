@@ -6,7 +6,7 @@ description: "Memory terpusat Finova — aplikasi akuntansi: satu biner Go (net/
 scope: project
 project: "Sistem Akuntansi (Finova)"
 status: active
-updated: 2026-09-23
+updated: 2026-09-25
 tags: ["memory/project", "project/Sistem Akuntansi"]
 ---
 
@@ -16,25 +16,54 @@ tags: ["memory/project", "project/Sistem Akuntansi"]
 > (diarsipkan verbatim di bawah) dan **`Master_Memory_Workflow.md` versi memori Qoder**
 > (8 keputusan kanonik 21–23 Sep 2026 — juga diarsipkan verbatim). Bagian ini ringkasannya;
 > kalau ada perbedaan detail, arsip verbatim + bagian R4 di bawah yang berlaku.
+>
+> **Koreksi 2026-09-25:** kalimat prioritas di atas berlaku untuk alasan dan latar belakang
+> keputusan, **bukan** untuk angka. Arsip verbatim membeku di keadaan 23 September, jadi untuk fakta
+> teknis yang berlaku adalah R1–R6 dokumen ini; arsip tetap jadi rujukan sejarah keputusan.
 
 **Lokasi:** `C:\Users\Daffa\Desktop\Folder Space AI\Folder Space Semester 7\Sistem Akuntansi`
 **Nama produk:** *Finova — Sistem Akuntansi & Pembukuan Web Terpadu Indonesia*
 (`package.json`: `finova-akuntansi`, productName `Finova`, v1.0.0 · Go module `finova`, go 1.27.1)
-**Status:** aktif, ter-git (11 commit; terakhir 2026-09-23 `feat(ui): sistem desain token dan mode gelap yang benar`).
+**Status:** aktif, ter-git (12 commit; terakhir 2026-09-23 `feat(desktop): jendela WebView2 dan port acak, lepas dari localhost tetap`). Perubahan 2026-09-24 (hapus penyimpanan musik + tabel `music_tracks` + `/api/tracks`, hapus pencarian global & mode gelap, piringan ke kanan atas; basis data MySQL `finova_akuntansi` di-drop) belum di-commit.
 `README.md` proyek **sangat akurat** — semua klaimnya terverifikasi cocok dengan kode.
+
+**Koreksi 2026-09-26:** angka di bawah diukur ulang 26 Sep. Versi **kembali ke 1.0.0** atas
+permintaan user (naik ke 1.0.1 pada 25 Sep lalu dibatalkan; artefak `Finova-Setup-1.0.1-amd64.exe`
+sudah **dihapus**, hanya berkas 1.0.0 yang ada). Working tree masih belum di-commit — 17 berkas
+berubah, berisi: penghapusan penyimpanan musik + `music_tracks` + `/api/tracks`, penghapusan
+pencarian global & mode gelap, piringan ke kanan atas, perbaikan autoplay + pengecualian rotasi
+piringan dari `prefers-reduced-motion`, dan **penghapusan tutorial** (`OnboardingWalkthrough`).
+Basis data MySQL `finova_akuntansi` sudah di-drop.
+
+Kalimat "`README.md` sangat akurat" di atas tidak berlaku penuh lagi sejak README diarsipkan
+verbatim: arsipnya masih memuat angka/aturan yang sudah diganti (`PORT=5199`,
+`http://localhost:3000`, pintasan `Ctrl+K`, mode gelap, `Finova-Setup-1.0.0-amd64.exe`,
+`finova.exe` 17,4 MiB). Bila arsip dan bagian R1–R6 bentrok, **R1–R6 dokumen ini yang berlaku**.
 
 ## R1. Angka Kunci
 
 | Aspek | Nilai |
 |---|---|
-| Go | ±7.574 LOC (cmd+internal+tools, 29 berkas `.go`) |
-| Frontend | ±5.970 LOC TS/TSX (42 berkas `src`) |
-| Skema SQL | 190 baris, **10 tabel**, 36 akun COA seed |
-| Biner | `finova.exe` **18.266.624 B (17,4 MiB)** |
-| Installer | NSIS 5,6 MiB (LZMA 31,6%) → `build\bin\Finova-Setup-1.0.0-amd64.exe` |
+| Go | **7.805 LOC** (cmd+internal+tools, 29 berkas `.go`; non-tes 24 berkas = 6.327 LOC) |
+| Frontend | **5.246 LOC** TS/TSX (38 berkas `src`; non-tes 34 berkas = 4.899 LOC) |
+| Skema SQL | **178 baris, 9 tabel** (`internal/db/schema/schema.sqlite.sql`), 36 akun COA seed — baris terakhir: `DROP TABLE IF EXISTS music_tracks;` |
+| Biner | `finova.exe` **18.113.024 B (17,3 MiB)** — dibangun ulang 2026-09-26, versi 1.0.0 |
+| Installer | NSIS 5.738.682 B (5,5 MiB; LZMA 31,7%) → `build\bin\Finova-Setup-1.0.0-amd64.exe` |
 | Dependensi runtime FE | hanya 4: react, react-dom, lucide-react, recharts |
 | `node_modules` | ±185 MB (~200 paket top-level) — **dipertahankan atas keputusan user** |
-| Port | **tidak ada port tetap** — server bind `127.0.0.1:0` dan OS yang memilih; Vite juga port acak |
+| Port | **tidak ada port tetap** — `.env` berisi `PORT=` kosong, server bind `127.0.0.1:0` dan OS yang memilih; Vite juga port acak |
+
+**Koreksi 2026-09-25:** baris-baris di atas diukur ulang dari pohon kerja saat ini.
+Yang sebelumnya tertulis dan sekarang **digantikan**: skema "190 baris, 10 tabel"
+(salah — R6 sudah lama mendaftar 9 tabel, dan R1 yang membantahnya; tabel musik memang
+sengaja **dihapus**, bukan dihitung sebagai tabel ke-10), "±5.970 LOC TS/TSX (42 berkas)"
+dan "±7.574 LOC (29 berkas)", biner "18.266.624 B (17,4 MiB)", serta installer
+`Finova-Setup-1.0.0-amd64.exe`. Penyusutan jumlah baris frontend adalah akibat penghapusan
+24–25 September (penyimpanan musik, `GlobalSearchModal`, `localAudio`, mode gelap) dan 26
+September (tutorial `OnboardingWalkthrough` + CSS yatim `GlobalSearchModal`), bukan kesalahan
+pengukuran. Riwayat versi installer: 1.0.0 → naik ke 1.0.1 (25 Sep) → **dikembalikan ke 1.0.0**
+atas permintaan user (26 Sep); berkas `Finova-Setup-1.0.1-amd64.exe` sudah dihapus, satu-satunya
+installer di `build\bin\` adalah `Finova-Setup-1.0.0-amd64.exe`.
 
 ## R2. Bentuk Arsitektur (keputusan paling penting)
 
@@ -55,7 +84,10 @@ sehingga tidak ada satu baris pun kode React/API yang berubah untuk mode desktop
    tulis sendiri jendela Win32-nya. Jangan buat `wails.json`, jangan `wails build`, jangan `cmd/desktop`.
    "Desktop" = `bin/finova.exe -app` → satu jendela WebView2. **Perlu dicatat:** aturan lama yang
    melarang shell desktop apa pun sudah dicabut 2026-09-23 atas permintaan user.
-2. **Finova tidak memakai port tetap** — bind `127.0.0.1:0`, OS yang memilih. Yang tinggal di sekitar:
+2. **Finova tidak memakai port tetap** — bind `127.0.0.1:0`, OS yang memilih (`.env`
+   / `.env.example` proyek kini benar-benar berisi `PORT=` kosong — `PORT=5199` lama sudah mati,
+   begitu pula segala ajakan "pakai 3000"; lihat arsip di bawah yang masih menuliskannya).
+   Yang tinggal di sekitar:
    **3000 & 5000** = Express proyek Skripsi (`/api/health` membalas `"databaseMessage":"Database MySQL
    XAMPP..."`), **5173/5174** = Vite proyek AI VTUBER. Milik Finova:
    `{"ok":true,"service":"finova-api","runtime":"go"}`. **JANGAN pernah `Stop-Process` penghuni port
@@ -67,13 +99,21 @@ sehingga tidak ada satu baris pun kode React/API yang berubah untuk mode desktop
    `scripts/make-installer.mjs`, `.nsi` di `build/windows/installer/finova.nsi`. Pasang
    **per-pengguna** ke `%LOCALAPPDATA%\Programs\Finova` (`RequestExecutionLevel user`, tanpa UAC);
    data di `%APPDATA%\Finova`. Jangan perkenalkan runtime Node; jangan taruh data di folder instalasi.
+   **Cara memasang dari shell (terbukti 2026-09-26):** selalu **jalur absolut** ke `.exe` installer —
+   `Start-Process -FilePath "build\bin\...exe"` dengan jalur relatif membuat PowerShell menjalankan
+   proses lain dan **mengembalikan kode 0 tanpa menulis apa pun** ke folder tujuan. Kode keluar 0 bukan
+   bukti terpasang: verifikasi dengan `"$LOCALAPPDATA\Programs\Finova\finova.exe" version` + hash
+   dibandingkan `bin/finova.exe`, bukan dari exit code. Bila `finova.exe` enggan terganti (aplikasi
+   masih hidup meski ada penjaga `taskkill` di `.nsi`), ganti nama berkas lama lalu pasang ulang.
 4. **`internal/config`:** pakai `database/` di repo bila `go.mod` ada (mode dev), jika tidak `%APPDATA%\Finova`.
 5. **Jangan usul** hapus `node_modules` atau commit artefak build (`bin/`, `internal/web/dist/*`
    di-gitignore, hanya `.gitkeep`) — user memilih biarkan pada 2026-09-23. Konsekuensinya: clone +
    `go build` tanpa `npm install` menghasilkan biner ber-UI kosong.
 6. **Pemutar musik:** audio YouTube **hanya via penyematan IFrame resmi**. Mengunduh/menyimpan audio
-   YouTube ke disk **tidak boleh dibuat** (hak cipta + ToS). Audio impor user hidup di IndexedDB
-   (`finova-music`, store `meta` + `audio`). Bila diminta "unduh lagu/ekspor MP3 dari link YouTube":
+   YouTube ke disk **tidak boleh dibuat** (hak cipta + ToS). Sejak 2026-09-24 pemutar **tidak menyimpan
+   apa pun**: tidak ada tabel basis data, tidak ada IndexedDB, tidak ada seed — daftar putar hanya hidup
+   selama sesi (hilang saat aplikasi ditutup); hanya volume di `localStorage`. Impor berkas audio dan
+   penyimpanan lagu dihapus atas permintaan user. Bila diminta "unduh lagu/ekspor MP3 dari link YouTube":
    tolak bagian unduhnya, tawarkan jalur sah.
 7. **Ukuran biner sudah diaudit** — tiga opsi pemangkasan (UPX, lepas recharts, gzip aset web)
    **ditolak user 2026-09-23**. Kalau topik ini muncul lagi: tunjukkan tabel R1, jangan audit ulang.
@@ -114,7 +154,7 @@ PORT=5277 DATABASE_FILE=./tmp-tampil/finova.sqlite ./bin/finova.exe -no-browser
 
 - **Stack:** Go murni `net/http` · SQLite **`modernc.org/sqlite`** (murni-Go, tanpa CGO, WAL aktif) ·
   `xuri/excelize/v2` (indirect `go-pdf/fpdf` untuk PDF) · React 18 + TSX strict + Tailwind
-  (tema **Glassmorphism** light/dark) + Vite · kontrak data bersama di `shared/types.ts`.
+  (tema **Glassmorphism** light) + Vite · kontrak data bersama di `shared/types.ts`.
 - **Struktur:** `cmd/finova` (main + `.syso` + manifest) · `internal/{config,db(+schema),desktop,domain,export,httpapi,web(+dist),xlsx}` ·
   `scripts/*.mjs` (+ `uji-installer.ps1`) · `tools/genicon` · `shared/types.ts` ·
   `src/{components/{layout,modals,ui,views,widgets},hooks,services,utils}` · `database/` · `build/windows`.
@@ -138,8 +178,21 @@ PORT=5277 DATABASE_FILE=./tmp-tampil/finova.sqlite ./bin/finova.exe -no-browser
   Runtime WebView2 sudah ada di mesin user (v153, HKLM). Profil browser ditanam di
   `<folder data>/webview2` (`Config.WebViewUserData`). Ikon jendela diambil dari biner sendiri lewat
   `ExtractIconExW`, taskbar diidentifikasi via `SetCurrentProcessExplicitAppUserModelID`.
-- **10 tabel:** `companies, users, accounts, accounting_periods, import_batches, journal_entries,
-  journal_lines, audit_logs, journal_templates, music_tracks`. Seed: 1 perusahaan
+  - **Kebijakan autoplay WebView2 memblokir suara YouTube.** Defaultnya seketat Chrome: iframe
+    lintas-asal tidak boleh memutar audio, jadi lagu hanya ter-cue (durasi sudah terbaca, posisi macet 0:00) dan
+    **piringan tidak berputar**. Perbaikan: `edge.Chromium.AdditionalBrowserArgs =
+    []string{"--autoplay-policy=no-user-gesture-required"}` di `window_windows.go` — field ini yang
+    diteruskan ke `CreateCoreWebView2EnvironmentWithOptions`; variabel lingkungan
+    `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` **diabaikan** bila argumen dikirim lewat API.
+  - **Jangan `await` di dalam handler klik sebelum memanggil `yt.load`.** Aktivasi pengguna habis dan
+    blokir autoplay aktif lagi; putar dulu, metadata oEmbed menyusul.
+  - `finova.exe` yang **ditumbangkan** (`Stop-Process -Force`) meninggalkan profil WebView2 terkunci:
+    instans berikutnya boot sukses tapi **tanpa jendela**. Pemulihan: hapus `<folder data>/webview2`.
+  - Uji kebijakan ini tidak bisa lewat Playwright default (ia mengirim
+    `--autoplay-policy=no-user-gesture-required` sendiri). Jalankan dengan
+    `--autoplay-policy=user-gesture-required` untuk mereproduksi kondisi desktop.
+- **9 tabel:** `companies, users, accounts, accounting_periods, import_batches, journal_entries,
+  journal_lines, audit_logs, journal_templates`. Seed: 1 perusahaan
   (`PT Finova Akuntansi Indonesia`) + **36 akun COA** kode 4 digit (`INSERT OR IGNORE INTO accounts`).
 - **Endpoint (`internal/httpapi/server.go`, otoritatif):** `GET /api/health` · `GET|PUT /api/company` ·
   `GET|POST /api/accounts`, `PUT /api/accounts/{id}` · `GET|POST /api/periods`,
@@ -147,14 +200,14 @@ PORT=5277 DATABASE_FILE=./tmp-tampil/finova.sqlite ./bin/finova.exe -no-browser
   `GET|PUT|DELETE /api/journals/{id}`, `POST /api/journals/{id}/post|reverse`, `GET /api/journals/{id}/audit` ·
   `GET /api/imports/template`, `POST /api/imports/preview`, `POST /api/imports/{id}/confirm` ·
   `GET /api/reports/{kind}` · `GET /api/exports/{journal.xlsx|journal.pdf|ledger.xlsx|trial-balance.xlsx|accounts.xlsx}` ·
-  `GET|POST /api/templates`, `DELETE /api/templates/{id}` · `GET|POST /api/tracks`,
-  `PUT /api/tracks/order`, `DELETE /api/tracks/{id}` · `GET /api` + `/` (statis/SPA).
+  `GET|POST /api/templates`, `DELETE /api/templates/{id}` · `GET /api` + `/` (statis/SPA).
+  Rute `/api/tracks*` sudah dilepas (2026-09-24) bersama penyimpanan lagu.
   String `/api/auth/*` **hanya** muncul di `*_test.go` — bukan rute nyata (konsisten "tanpa login").
 - **Fitur:** siklus akuntansi lengkap (Jurnal Umum → Buku Besar → Neraca Saldo → Laporan Keuangan),
   format jurnal SAK (debit rata kiri, kredit menjorok `↳`, garis ganda), rekapitulasi, auto-balance,
-  13 template transaksi, panduan ALERE, ekspor xlsx/pdf server-side, pemutar musik (embed YouTube +
-  impor audio). Pintasan: Ctrl+K, Esc, Alt+P / Alt+←→ / Alt+M; grid jurnal Enter / Ctrl+Enter / Ctrl+S /
-  Ctrl+D / Shift+D / K.
+  13 template transaksi, panduan ALERE, ekspor xlsx/pdf server-side, pemutar musik sesi (embed YouTube,
+  tanpa penyimpanan). Pintasan: Esc, Alt+P / Alt+←→ / Alt+M; grid jurnal Enter / Ctrl+Enter / Ctrl+S /
+  Ctrl+D / Shift+D / K. (Pencarian global Ctrl+K dan mode gelap dilepas 2026-09-24.)
 
 ## R7. Aturan Memory Proyek Ini
 
@@ -183,6 +236,19 @@ Perubahan berarti dicatat di sini lewat commit `docs(memory): catat …`.
 Isi setiap sumber dipertahankan apa adanya; separator hanya menandai batas antar dokumen.
 Diarsipkan saat konsolidasi memory 2026-09-23 (generator satu-kali pakai, sudah dihapus)
 
+**Koreksi 2026-09-25 (cara membaca arsip):** dua berkas di bawah adalah salinan verbatim apa
+adanya dan **tidak boleh disunting**, jadi sebagian isinya berhenti di keadaan yang lebih lama dari
+R1–R6. Yang **sudah diganti dan jangan dipakai lagi**: `PORT=5199` / `PORT=5199 npm run dev` /
+`http://localhost:3000` / "peramban terbuka otomatis di `http://localhost:5199`" (kini `PORT=`
+kosong, port dipilih OS), baris pintasan `Ctrl+K` di tabel README (pencarian global dilepas
+2026-09-24, sama seperti mode gelap), judul "1. Arsitektur: tanpa cangkang desktop" + ajakan
+"arahkan ke peramban" di arsip memori Qoder (jendela WebView2 `-app` sudah ada sejak 2026-09-23;
+yang tetap dilarang hanya framework/CLI Wails — R3.1 yang authoritative), dan angka ukur
+`finova.exe` 18.266.624 B / 17,4 MiB, installer `Finova-Setup-1.0.0-amd64.exe`, 5,5 MiB,
+`node_modules` 159,5 MiB. Bagian musik di kedua arsip **sudah** menyebut keadaan terbaru
+(tanpa `music_tracks`, tanpa IndexedDB, tanpa impor berkas audio, sesi-saja) — tidak perlu
+dibantah. Angka dan aturan terkini = R1–R6.
+
 <!-- ARCHIVE-BEGIN -->
 <details>
 <summary>README.md · 331 baris · disalin verbatim</summary>
@@ -203,7 +269,7 @@ Server API ditulis ulang dalam **Go murni** (`net/http` + driver SQLite tanpa CG
 - **Database**: SQLite 3 lewat driver murni Go [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite) (tanpa CGO/gcc), mode Write-Ahead Logging (WAL)
 - **Skema & seed**: `internal/db/schema/schema.sqlite.sql` ditanam ke biner (`go:embed`) dan diterapkan otomatis saat pertama berjalan
 - **Excel**: [`excelize`](https://github.com/xuri/excelize) untuk templat impor dan pembacaan berkas unggahan di sisi server
-- **Frontend**: [React 18](https://react.dev/) + **TSX** (Strict TypeScript), [Tailwind CSS](https://tailwindcss.com/) dengan tema Glassmorphism (Light & Dark Mode), dibangun oleh [Vite](https://vitejs.dev/)
+- **Frontend**: [React 18](https://react.dev/) + **TSX** (Strict TypeScript), [Tailwind CSS](https://tailwindcss.com/) dengan tema Glassmorphism (Light Mode; mode gelap dilepas 2026-09-24), dibangun oleh [Vite](https://vitejs.dev/)
 - **Aset frontend**: hasil build Vite (`internal/web/dist`) di-embed ke biner Go, dilayani dengan fallback SPA untuk rute dalam
 - **Shared Types**: `shared/types.ts` sebagai kontrak data frontend; kunci JSON backend mengikuti nama kolom SQLite
 - **Testing**: `go test` (unit akuntansi, lapisan database, integrasi HTTP penuh) + [Vitest](https://vitest.dev/) untuk komponen & utilitas frontend
@@ -249,41 +315,31 @@ Server API ditulis ulang dalam **Go murni** (`net/http` + driver SQLite tanpa CG
 - **Dashboard Keuangan**: Grafik kinerja pendapatan vs beban serta indikator kas & bank real-time.
 - **Operator tunggal**: aplikasi lokal tanpa login; setiap transaksi tetap tercatat atas nama operator dan meninggalkan jejak audit lengkap di `audit_logs`.
 
-### 5. Pemutar Musik (Kiri Atas, Minimalis, Bisa Ditutup)
-Pemutar musik berupa strip ramping di **kiri atas** area kerja, bukan bar besar di bawah:
+### 5. Pemutar Musik (Kanan Atas, Sesi-Saja)
+Sejak 2026-09-24 pemutar musik **tidak menyimpan apa pun** — tidak ada lagu di basis data, tidak ada
+berkas audio di peramban, tidak ada seed. Ia berupa kapsul mengambang di **kanan atas** jendela
+(`.music-fab`, `position: fixed; top: 12px; right: 16px`) supaya tidak menutupi konten halaman:
 
-- **Piringan minimalis** — lingkaran datar 38 px dengan alur halus; **berputar saat lagu
-  jalan** dan **label tengahnya memakai sampul lagu** yang sedang diputar, jadi tampilannya
-  ikut berganti tiap lagu. Klik piringan = putar/jeda.
-- **Bisa ditutup** — tombol `×` meliput widget menjadi chip piringan kecil di pojok kiri atas
-  (atau `⌃` untuk mengecilkan); tombol panah pada chip membukanya kembali. Mode ini tersimpan
-  di `localStorage`, jadi tetap sama saat aplikasi dibuka lagi.
-- **Sumber lagu**: (a) tempel tautan YouTube — diputar lewat *YouTube IFrame Player API* resmi,
-  judul/pemegang hak/sampul diambil otomatis oleh server lewat oEmbed; (b) impor **berkas audio
-  milik sendiri** (mp3, m4a, ogg, opus, wav, flac) yang tersimpan di IndexedDB peramban.
-- **Kelola berkas dan daftar putar**
-  - *Simpan berkas ke komputer* — menyalin ulang berkas audio **milik Anda sendiri** dari
-    peramban ke folder unduhan (untuk dipindah ke perangkat lain).
-  - *Ekspor .m3u* — daftar putar menjadi berkas teks berisi **tautan** YouTube (bukan audio),
-    bisa dibuka di VLC/Winamp.
-  - *Hapus lagu* per baris dan *Kosongkan* seluruh daftar (lagu tersimpan + berkas di peramban),
-    dengan konfirmasi.
-  - Daftar lagu YouTube disimpan di basis data (`music_tracks`) sehingga ikut terbawa saat
-    folder data dipindah.
+- **Piringan** — lingkaran gelap dengan sampul **full-bleed** (`.vinyl-fab .vinyl-label { inset: 5% }`);
+  **berputar saat lagu jalan** (`@keyframes spin`), dan bila belum ada lagu / sampul gagal dimuat
+  tampil **piringan hitam default** dengan ikon `Music2`. Klik piringan = putar/jeda.
+- **Panel** — tombol `☰` membuka kartu rata-kanan di bawah piringan: info judul/penyanyi, seek,
+  kontrol, tambah tautan, daftar putar, dan tombol `×` menutupnya.
+- **Sumber lagu**: hanya **tempel tautan YouTube** — diputar lewat *YouTube IFrame Player API* resmi;
+  judul/penyanyi/sampul diambil otomatis dari **oEmbed sisi klien** (`lookupYouTubeMeta` di
+  `MusicPlayer.tsx`). Sebagian kanal menonaktifkan penyematan — galat diterjemahkan ke bahasa Indonesia.
+- **Sesi-saja**: daftar putar hidup di state komponen, hilang saat aplikasi ditutup. Hanya **volume**
+  yang diingat (`localStorage` `finova_music_volume`). Tidak ada paragraf penjelasan di panel —
+  teks catatan + daftar pintasan sudah dilepas atas permintaan user (2026-09-25).
 - **Kontrol**: lagu sebelumnya/berikutnya, geser posisi, volume, bisukan, acak, ulang satu lagu,
-  dan lanjut otomatis saat lagu selesai. **Pintasan**: `Alt+P`, `Alt+→` / `Alt+←`, `Alt+M`.
-- Dock tidak ikut tercetak (`@media print` + kelas `no-print`) dan menghormati
-  `prefers-reduced-motion`: bila animasi dimatikan di sistem, piringan berhenti berputar dan
-  diganti cincin aksen statis sebagai tanda "sedang diputar".
-- Bawaan awal berisi tiga lagu resmi kanal **Lyn - Topic** (distribusi OST Atlus/Sony):
-  *Rivers In the Desert*, *Life Will Change*, *Last Surprise*. Saran ini otomatis hilang begitu
-  daftar putar Anda berisi lagu sendiri. Sebagian kanal menonaktifkan penyematan — tersedia
-  tombol "Buka di YouTube" pada tiap baris.
+  hapus per baris, dan lanjut otomatis saat lagu selesai. **Pintasan**: `Alt+P`, `Alt+→` / `Alt+←`, `Alt+M`.
+- Tidak ikut tercetak (`@media print` + kelas `no-print`). **Rotasi piringan dikecualikan** dari
+  `prefers-reduced-motion` (butuh `!important` karena aturan universalnya juga `!important`): mesin
+  dengan "Show animations" mati melaporkan `reduce`, dan rotasi ini penanda fungsional "lagu jalan",
+  bukan hiasan.
 
 > **Catatan hak cipta**: aplikasi ini **tidak mengunduh audio dari YouTube**. Pemutaran memakai
-> pemutar resmi YouTube, dan penyalinan lagu Atlus ke berkas adalah pelanggaran ketentuan
-> YouTube serta hak cipta. Yang bisa disimpan ke komputer hanyalah berkas audio yang Anda
-> impor sendiri.
+> pemutar resmi YouTube. Fitur unduh/ekspor MP3 dari tautan YouTube tetap ditolak.
 
 ---
 
@@ -320,12 +376,11 @@ Sistem-Akuntansi/
 │   └── types.ts            # Tipe domain frontend (cermin kunci JSON dari Go)
 ├── src/                    # Frontend React 18 + TSX
 │   ├── components/
-│   │   ├── layout/         # AppShell, OnboardingWalkthrough
+│   │   ├── layout/         # AppShell (tutorial OnboardingWalkthrough sudah dihapus)
 │   │   ├── modals/         # JournalModal, ReverseJournalModal, TemplateModal, AuditLog, dsb.
 │   │   ├── ui/             # Reusable UI (Button, Modal, Badge, AccountPicker, AmountInput, ...)
 │   │   └── views/          # Dashboard, Accounts, Journals, Ledger, TrialBalance
-│   ├── services/           # downloads.ts (unduh berkas dari /api/exports),
-│   │                       # localAudio.ts (berkas audio pengguna di IndexedDB)
+│   ├── services/           # downloads.ts (unduh berkas dari /api/exports)
 │   ├── utils/              # formatters, validators, music.ts (parsing & urutan lagu)
 │   ├── hooks/              # useLoad, useYouTubePlayer (IFrame API resmi)
 │   ├── components/widgets/ # MusicPlayer (piringan berputar + daftar putar)
@@ -649,7 +704,7 @@ jurnal terposting sengaja tidak bisa dihapus lewat UI — entri nyasar jadi perm
 **Why:** klaim "tampilan sudah bagus" baru bisa dibuktikan setelah pindah ke Playwright; pengukuran lewat
 peramban dalam aplikasi menghasilkan angka menyesatkan.
 
-**How to apply:** setiap mengubah CSS/tata letak dan perlu membuktikan geometri, mode gelap, atau kontras —
+**How to apply:** setiap mengubah CSS/tata letak dan perlu membuktikan geometri atau kontras —
 server port gores + DB salinan (bagian 4), probe Playwright, lalu **lihat sendiri gambar layarnya** sebelum
 melapor selesai.
 
@@ -691,11 +746,12 @@ Batas ini ditetapkan pengguna, bukan keputusan teknis:
 - **Audio YouTube hanya boleh diputar lewat penyematan IFrame resmi YouTube.** Mengunduh/menyimpan audio
   YouTube ke disk tidak boleh dibuat — itu menyalin lagu berhak cipta (mis. Atlus untuk Persona) dan
   melanggar ketentuan YouTube.
-- Berkas audio yang **diimpor pengguna** disimpan di IndexedDB (`finova-music`, store `meta` + `audio`) dan
-  boleh disimpan ulang ke komputer atau dihapus olehnya.
-- Daftar putar awal diisi tautan kanal resmi (pilihan pengguna), bukan rip/unggah ulang.
-- Bentuk UI: pilis ramping kiri atas, piringan berputar dengan label = sampul lagu, bisa dikecilkan dan
-  ditutup; pintasan Alt+P / Alt+←→ / Alt+M.
+- Sejak 2026-09-24 pemutar **tidak menyimpan lagu sama sekali** (atas permintaan pengguna): tidak ada
+  tabel `music_tracks`, tidak ada IndexedDB `finova-music`, tidak ada impor berkas audio, tidak ada seed.
+  Daftar putar hanya hidup selama sesi berjalan.
+- Bentuk UI: kapsul mengambang **kanan atas** (`position: fixed; top: 12px; right: 16px`), piringan
+  berputar dengan sampul full-bleed (piringan hitam default bila tak ada gambar), panel bisa ditutup;
+  pintasan Alt+P / Alt+←→ / Alt+M.
 
 **Why:** pengguna ingin bekerja sambil dengar musik tanpa aplikasi jadi sarana pembajakan, dan ia
 menyatakan sendiri bahwa pengunduh audio YouTube tidak boleh saya buat.

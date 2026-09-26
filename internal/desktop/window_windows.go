@@ -251,6 +251,12 @@ func RunWindow(ctx context.Context, opts WindowOptions) error {
 	chromium := edge.NewChromium()
 	chromium.DataPath = opts.UserDataDir
 	chromium.Debug = opts.DevTools
+	// Kebijakan autoplay bawaan WebView2 seketat Chrome: suara dari iframe
+	// lintas-asal (pemutar YouTube) ditolak meski pengguna baru saja menekan
+	// "Putar", sehingga lagu hanya ter-cue dan piringan tidak berputar.
+	// Aplikasi ini tidak pernah memutar sendiri tanpa perintah pengguna, jadi
+	// kebijakan dibuka khusus jendela ini.
+	chromium.AdditionalBrowserArgs = []string{"--autoplay-policy=no-user-gesture-required"}
 	chromium.SetErrorCallback(func(err error) { log.Printf("[webview2] %v", err) })
 	current.set(hwnd, chromium)
 	defer current.clear()

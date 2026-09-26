@@ -1,12 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { AppShell } from './components/layout/AppShell.js'
-import { OnboardingWalkthrough } from './components/layout/OnboardingWalkthrough.js'
 import { DashboardView } from './components/views/DashboardView.js'
 import { JournalsView, RegisterFilters, defaultRegisterFilters } from './components/views/JournalsView.js'
 import { LedgerView } from './components/views/LedgerView.js'
 import { TrialBalanceView } from './components/views/TrialBalanceView.js'
 import { AccountsView } from './components/views/AccountsView.js'
-import { GlobalSearchModal } from './components/modals/GlobalSearchModal.js'
 import { MusicPlayer } from './components/widgets/MusicPlayer.js'
 import { PageLoading } from './components/ui/PageLoading.js'
 import { ErrorNotice } from './components/ui/ErrorNotice.js'
@@ -22,9 +20,6 @@ export interface ToastState {
 function Workspace(): React.JSX.Element {
   const [route, setRoute] = useState<string>('journals')
   const [toast, setToast] = useState<ToastState | null>(null)
-  const [dark, setDark] = useState<boolean>(() => localStorage.getItem('finova_dark') === '1')
-  const [searchOpen, setSearchOpen] = useState<boolean>(false)
-  const [showOnboard, setShowOnboard] = useState<boolean>(() => !localStorage.getItem('finova_onboarded'))
   // Filter register dijaga di sini agar berpindah layar tidak menghapus hasil kerja.
   const [registerFilters, setRegisterFilters] = useState<RegisterFilters>(() => defaultRegisterFilters())
 
@@ -34,22 +29,6 @@ function Workspace(): React.JSX.Element {
   const notify = useCallback((message: string, isError = false) => {
     setToast({ message, error: isError })
     window.setTimeout(() => setToast(null), 4000)
-  }, [])
-
-  useEffect(() => {
-    document.body.classList.toggle('dark', dark)
-    localStorage.setItem('finova_dark', dark ? '1' : '0')
-  }, [dark])
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.ctrlKey && e.key === 'k') {
-        e.preventDefault()
-        setSearchOpen(true)
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   if (companyState.loading || accountsState.loading) {
@@ -102,9 +81,6 @@ function Workspace(): React.JSX.Element {
       company={company}
       route={route}
       setRoute={setRoute}
-      dark={dark}
-      setDark={setDark}
-      onSearch={() => setSearchOpen(true)}
     >
       <MusicPlayer notify={notify} />
 
@@ -122,22 +98,6 @@ function Workspace(): React.JSX.Element {
         >
           {toast.message}
         </div>
-      )}
-
-      <GlobalSearchModal
-        open={searchOpen}
-        onClose={() => setSearchOpen(false)}
-        accounts={accounts}
-        setRoute={setRoute}
-      />
-
-      {showOnboard && (
-        <OnboardingWalkthrough
-          done={() => {
-            setShowOnboard(false)
-            localStorage.setItem('finova_onboarded', '1')
-          }}
-        />
       )}
     </AppShell>
   )

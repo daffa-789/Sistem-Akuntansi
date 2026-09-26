@@ -81,51 +81,7 @@
   --action-glow: rgba(14, 113, 69, .26);
 }
 
-/* Mode gelap: cukup ganti token, seluruh komponen ikut menyesuaikan. */
-body.dark {
-  --brand-50: #10231b;
-  --brand-100: #163024;
-  --brand-200: #1d4230;
-  --brand-300: #2c5c43;
-  --brand-400: #4bc48c;
-  --brand-500: #34d399;
-  --brand-600: #6ee7b7;
-  --brand-700: #a7f3d0;
-  --debit: #5ee0a3;
-  --debit-soft: #10281d;
-  --debit-line: #1d4230;
-  --credit: #7dd3fc;
-  --credit-soft: #12303f;
-  --credit-line: #1e4a63;
-  --good: #4ade80;
-  --bad: #fb7185;
-  --danger: #f0908f;
-  --danger-ink: #fca5a5;
-  --danger-soft: #2b1517;
-  --danger-line: #5b2325;
-  --warn: #f4c46a;
-  --warn-soft: #2b2213;
-  --warn-line: #5b4520;
-  --canvas: #0d1622;
-  --surface: #16212e;
-  --surface-2: #1b2836;
-  --surface-3: #223041;
-  --ink: #e6edf3;
-  --ink-2: #c2cfda;
-  --ink-3: #93a4b3;
-  --ink-4: #7b8d9c;
-  --line: #27384b;
-  --line-2: #213142;
-  --line-strong: #33475e;
-  --sh-1: 0 1px 2px rgba(0, 0, 0, .35);
-  --sh-2: 0 2px 6px rgba(0, 0, 0, .35);
-  --sh-3: 0 12px 30px rgba(0, 0, 0, .42);
-  --sh-4: 0 22px 48px rgba(0, 0, 0, .5);
-  --sh-5: 0 32px 80px rgba(0, 0, 0, .6);
-  --ring: 0 0 0 3px rgba(52, 211, 153, .26);
-  background: var(--canvas);
-  color: var(--ink);
-}
+/* Mode gelap sudah dilepas: aplikasi selalu memakai tema terang di bawah. */
 
 * { box-sizing: border-box; }
 
@@ -218,7 +174,6 @@ kbd { padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-widt
 
 .breadcrumb { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
 .breadcrumb strong { display: block; margin-top: 2px; color: var(--ink); font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
-.topbar-actions { display: flex; align-items: center; gap: 6px; padding: 5px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface-2); box-shadow: var(--sh-1); }
 
 .content { max-width: 1440px; padding: 30px 40px 56px; margin: 0 auto; }
 
@@ -385,22 +340,6 @@ kbd { padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-widt
 .modal-foot { position: sticky; bottom: 0; display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 15px 22px; border-top: 1px solid var(--line); background: var(--surface-2);
   background: color-mix(in srgb, var(--surface-2) 94%, transparent); backdrop-filter: blur(8px); }
 
-.search-backdrop { z-index: 50; }
-.search-modal { width: min(560px, 100%); overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--sh-5); animation: pop var(--t-slow) ease both; }
-.search-header { display: flex; align-items: center; gap: 10px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
-.search-input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 15px; }
-.search-results { max-height: 340px; overflow: auto; padding: 6px; }
-.search-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 11px; border: 0; border-radius: var(--r-sm); color: var(--ink); text-align: left; background: transparent; font-size: 13px; }
-.search-item:hover { background: var(--brand-50); }
-.search-type { flex: 0 0 auto; padding: 2px 7px; border-radius: var(--r-xs); color: var(--brand-700); background: var(--brand-100); font-size: 10px; font-weight: 700; letter-spacing: .3px; white-space: nowrap; }
-.search-empty { padding: 24px; color: var(--ink-3); text-align: center; font-size: 13px; }
-
-.onboard-overlay { position: fixed; z-index: 60; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(6, 27, 18, .62); backdrop-filter: blur(4px); }
-.onboard-card { width: min(430px, 100%); padding: 30px; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--sh-5); text-align: center; animation: pop var(--t-slow) ease both; }
-.onboard-card h3 { margin: 0 0 10px; font-family: 'Playfair Display', Georgia, serif; font-size: 21px; color: var(--brand-700); }
-.onboard-card p { margin: 0 0 22px; color: var(--ink-2); font-size: 13.5px; line-height: 1.65; }
-.onboard-footer { display: flex; justify-content: space-between; align-items: center; }
-
 .toast { position: fixed; z-index: 70; right: 24px; bottom: 24px; max-width: 380px; padding: 12px 15px 12px 17px; border-radius: var(--r-md); color: #f2fbf5; background: linear-gradient(180deg, #17492f, #123524); box-shadow: var(--sh-4); font-size: 13px; animation: rise var(--t-slow) ease both; }
 .toast::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--brand-300); }
 .toast.error { color: #fff5f5; background: linear-gradient(180deg, #a5373a, #7f2a2c); }
@@ -550,9 +489,9 @@ td.accounting-double-line { color: var(--brand-700); border-top: 2px solid var(-
 .print-head, .print-signatures { display: none; }
 
 /* ============================== PEMUTAR MUSIK ============================== */
+/* Host iframe YouTube tersembunyi; fab kapsul mengambang di kanan atas agar tidak menutupi konten. */
 .music-host { position: fixed; top: -10px; left: -10px; width: 1px; height: 1px; opacity: 0; pointer-events: none; z-index: -1; }
 
-.music-bar { position: relative; display: flex; align-items: center; gap: 12px; width: fit-content; max-width: 100%; margin: 0 0 22px; padding: 6px 12px 6px 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface); box-shadow: var(--sh-2); }
 .music-info { min-width: 0; max-width: 240px; display: grid; gap: 1px; }
 .music-info strong { font-size: 12.5px; letter-spacing: -.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .music-info small { color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -576,21 +515,22 @@ td.accounting-double-line { color: var(--brand-700); border-top: 2px solid var(-
 .vinyl.spinning { animation: spin 3.6s linear infinite; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 0 0 3px rgba(63, 170, 118, .26), 0 2px 8px rgba(11, 36, 28, .3); }
 .vinyl.spinning:hover { animation-play-state: paused; }
 
-.music-mini { position: fixed; z-index: 38; top: 14px; left: calc(var(--sidebar-w) + 12px); display: flex; align-items: center; gap: 3px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface);
+/* Piringan versi fab: lebih besar, sampul memenuhi hampir seluruh muka (full-bleed). */
+.vinyl-fab { width: 46px; height: 46px; }
+.vinyl-fab .vinyl-label { inset: 5%; }
+
+/* Kapsul pemutar di kanan atas; panel terbuka melorot ke bawah, rata kanan. */
+.music-fab { position: fixed; z-index: 38; top: 12px; right: 16px; display: flex; align-items: center; gap: 3px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface);
   background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px); box-shadow: var(--sh-3); }
 .mini-open { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 50%; color: var(--ink-3); background: var(--surface-3); }
 .mini-open:hover { color: var(--brand-700); background: var(--brand-100); }
 
-.music-card { position: absolute; z-index: 39; top: calc(100% + 8px); left: 0; width: min(400px, calc(100vw - 40px)); max-height: min(62vh, 460px); overflow: auto; padding: 13px 14px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--sh-4); animation: pop var(--t) ease both; }
+.music-card { position: absolute; z-index: 39; top: calc(100% + 8px); right: 0; width: min(400px, calc(100vw - 40px)); max-height: min(62vh, 460px); overflow: auto; padding: 13px 14px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--sh-4); animation: pop var(--t) ease both; }
+.music-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.music-head > strong { font-size: 13px; color: var(--ink); }
+.music-row2 { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .music-add { display: flex; gap: 6px; }
 .music-add input { flex: 1; min-width: 0; }
-.music-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.music-tool { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px dashed var(--brand-300); border-radius: var(--r-sm); color: var(--brand-700); background: var(--brand-50); font-size: 11.5px; font-weight: 600; cursor: pointer; transition: background var(--t-fast), border-color var(--t-fast); }
-.music-tool:hover { background: var(--brand-100); border-color: var(--brand-400); }
-.music-tool.danger { color: var(--danger-ink); border-color: var(--danger-line); background: var(--danger-soft); }
-.music-tool.danger:hover { background: var(--danger-line);
-  background: color-mix(in srgb, var(--danger-soft) 60%, var(--danger-line)); }
-.music-tool input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .music-list { display: grid; gap: 2px; margin: 11px 0 0; padding: 0; list-style: none; }
 .music-list li { display: flex; align-items: center; gap: 2px; border-radius: var(--r-sm); }
 .music-list li.active { background: var(--brand-50); box-shadow: inset 0 0 0 1px var(--brand-200); }
@@ -605,8 +545,6 @@ td.accounting-double-line { color: var(--brand-700); border-top: 2px solid var(-
 .music-row-actions { display: flex; gap: 1px; }
 .music-row-actions .icon-button { width: 25px; height: 25px; border-radius: var(--r-xs); }
 .music-empty { padding: 14px 4px; color: var(--ink-3); font-size: 12px; text-align: center; }
-.music-note { margin: 11px 0 0; color: var(--ink-3); font-size: 10.5px; line-height: 1.55; }
-.music-note + .music-note { margin-top: 5px; }
 
 input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: var(--r-pill); background: var(--line-strong); outline-offset: 3px; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--brand-500); cursor: pointer; box-shadow: 0 0 0 3px rgba(14, 113, 69, .18);
@@ -623,7 +561,6 @@ input[type="range"]:disabled { opacity: .45; }
 @media (max-width: 1040px) {
   .grid-two { grid-template-columns: 1fr; }
   .content, .topbar { padding-left: 24px; padding-right: 24px; }
-  .music-mini { left: 14px; }
 }
 
 @media (max-width: 900px) {
@@ -633,7 +570,6 @@ input[type="range"]:disabled { opacity: .45; }
   .content { padding: 22px 16px 48px; }
   .topbar { min-height: 68px; padding: 0 16px; }
   .page-title { font-size: 24px; }
-  .music-bar { width: 100%; }
   .music-volume { width: 46px; }
   .recap-cols { grid-template-columns: 1fr; }
 }
@@ -642,7 +578,7 @@ input[type="range"]:disabled { opacity: .45; }
 @media print {
   @page { margin: 14mm 12mm; }
   body { background: #fff !important; color: #000 !important; font-size: 11pt !important; }
-  .sidebar, .topbar, .toolbar, .mobile-nav, .toast, .modal-backdrop, .onboard-overlay, .music-bar, .music-mini, .music-card, .music-host, .pager, .no-print { display: none !important; }
+  .sidebar, .topbar, .toolbar, .mobile-nav, .toast, .modal-backdrop, .music-fab, .music-card, .music-host, .pager, .no-print { display: none !important; }
   .main { width: 100% !important; margin: 0 !important; }
   .content { padding: 0 !important; max-width: 100% !important; }
   .panel { border: none !important; box-shadow: none !important; padding: 0 !important; }
@@ -669,6 +605,11 @@ input[type="range"]:disabled { opacity: .45; }
 /* ============================== PREFERENSI GERAK ============================== */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
-  /* Piringan tidak berputar; cincin aksen tetap menandai lagu sedang jalan. */
-  .vinyl.spinning { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 0 0 3px var(--brand-300); }
+  /*
+    Piringan pemutar DIKECUALIKAN. Rotasinya bukan hiasan: satu-satunya penanda
+    lagu sedang berjalan, dan Windows dengan "Show animations" mati melaporkan
+    prefers-reduced-motion: reduce sehingga aturan di atas membunuhnya kalau
+    tidak dikecualikan. Butuh !important karena aturan universal juga memakai itu.
+  */
+  .vinyl.spinning { animation: spin 3.6s linear infinite !important; animation-duration: 3.6s !important; animation-iteration-count: infinite !important; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 0 0 3px rgba(63, 170, 118, .26), 0 2px 8px rgba(11, 36, 28, .3); }
 }

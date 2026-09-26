@@ -41,7 +41,7 @@ SetCompressorDictSize 64
 
 ; ----------------------------- Halaman -------------------------------------
 !define MUI_WELCOMEPAGE_TITLE "Selamat datang di Finova ${AppVersion}"
-!define MUI_WELCOMEPAGE_TEXT "Sistem akuntansi pembukuan ganda berbahasa Indonesia.$\r$\n$\r$\nAplikasi berjalan sebagai satu berkas di komputer Anda - tanpa server, tanpa basis data eksternal. Data disimpan di folder AppData Anda.$\r$\n$\r$\nJendela peramban akan terbuka otomatis saat aplikasi dijalankan."
+!define MUI_WELCOMEPAGE_TEXT "Sistem akuntansi pembukuan ganda berbahasa Indonesia.$\r$\n$\r$\nAplikasi berjalan sebagai satu berkas di komputer Anda - tanpa server, tanpa basis data eksternal. Data disimpan di folder AppData Anda.$\r$\n$\r$\nSaat dijalankan, Finova terbuka sebagai jendela sendiri (bukan tab peramban)."
 !insertmacro MUI_PAGE_WELCOME
 
 !define MUI_PAGE_HEADER_TEXT "Pilih lokasi"
