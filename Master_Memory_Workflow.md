@@ -24,13 +24,14 @@ tags: ["memory/project", "project/Sistem Akuntansi"]
 **Lokasi:** `C:\Users\Daffa\Desktop\Folder Space AI\Folder Space Semester 7\Sistem Akuntansi`
 **Nama produk:** *Finova — Sistem Akuntansi & Pembukuan Web Terpadu Indonesia*
 (`package.json`: `finova-akuntansi`, productName `Finova`, v1.0.0 · Go module `finova`, go 1.27.1)
-**Status:** aktif, ter-git (12 commit; terakhir 2026-09-23 `feat(desktop): jendela WebView2 dan port acak, lepas dari localhost tetap`). Perubahan 2026-09-24 (hapus penyimpanan musik + tabel `music_tracks` + `/api/tracks`, hapus pencarian global & mode gelap, piringan ke kanan atas; basis data MySQL `finova_akuntansi` di-drop) belum di-commit.
+**Status:** aktif, ter-git. Commit fitur terakhir 2026-09-26 `feat(music): pemutar sesi di kanan atas, piringan benar-benar berputar` = `3ccbe9d` (17 berkas, +322/−1379); perubahan 2026-09-24 dan 2026-09-25 ikut terbawa di dalamnya.
 `README.md` proyek **sangat akurat** — semua klaimnya terverifikasi cocok dengan kode.
 
 **Koreksi 2026-09-26:** angka di bawah diukur ulang 26 Sep. Versi **kembali ke 1.0.0** atas
 permintaan user (naik ke 1.0.1 pada 25 Sep lalu dibatalkan; artefak `Finova-Setup-1.0.1-amd64.exe`
-sudah **dihapus**, hanya berkas 1.0.0 yang ada). Working tree masih belum di-commit — 17 berkas
-berubah, berisi: penghapusan penyimpanan musik + `music_tracks` + `/api/tracks`, penghapusan
+sudah **dihapus**, hanya berkas 1.0.0 yang ada). Semua perubahan 24–26 Sep sudah masuk satu
+commit `3ccbe9d` — 17 berkas, berisi: penghapusan penyimpanan musik + `music_tracks` +
+`/api/tracks`, penghapusan
 pencarian global & mode gelap, piringan ke kanan atas, perbaikan autoplay + pengecualian rotasi
 piringan dari `prefers-reduced-motion`, dan **penghapusan tutorial** (`OnboardingWalkthrough`).
 Basis data MySQL `finova_akuntansi` sudah di-drop.
