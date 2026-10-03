@@ -25,6 +25,7 @@ type testServer struct {
 	t             *testing.T
 	base          string
 	database      *db.DB
+	cfg           config.Config
 	accountByCode map[string]int64
 	year          int
 	entryDate     string
@@ -59,6 +60,7 @@ func newTestServer(t *testing.T) *testServer {
 		t:             t,
 		base:          httpServer.URL,
 		database:      database,
+		cfg:           cfg,
 		year:          time.Now().Year(),
 		accountByCode: map[string]int64{},
 	}

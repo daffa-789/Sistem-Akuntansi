@@ -1,13 +1,29 @@
-// Utilitas murni pemutar musik: parsing tautan, format waktu, dan urutan daftar
-// putar SEMENTARA. Sengaja tanpa DOM supaya bisa diuji langsung (lihat music.test.ts).
-// Tidak ada lagu yang disimpan: tidak ke basis data, tidak ke peramban.
+// Utilitas murni pemutar musik: parsing tautan, format waktu, urutan daftar
+// putar, dan pemeriksaan berkas audio impor. Sengaja tanpa DOM supaya bisa diuji
+// langsung (lihat music.test.ts).
+//
+// Pustaka musik disimpan di server (tabel music_tracks): lagu lokal disimpan
+// sebagai berkas di folder data aplikasi, sedangkan lagu YouTube hanya berupa
+// tautan. Audio YouTube tidak pernah disalin ke disk.
 
+export type TrackKind = 'LOCAL' | 'YOUTUBE'
+
+// Track satu lagu di pustaka. Lagu lokal memakai audioUrl, lagu YouTube memakai
+// youtubeId + thumbnail.
 export interface Track {
-  key: string
+  id: number
+  kind: TrackKind
   title: string
   artist: string
-  youtubeId: string
-  thumbnail: string
+  position: number
+  addedAt?: string
+  // Khusus lagu lokal
+  audioUrl?: string
+  sizeBytes?: number
+  duration?: number
+  // Khusus lagu YouTube
+  youtubeId?: string
+  thumbnail?: string
 }
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
@@ -39,6 +55,35 @@ export function youtubeWatchUrl(id: string): string {
 
 export function youtubeThumbnail(id: string): string {
   return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
+}
+
+// AUDIO_EXTENSIONS daftar format yang boleh diimpor; sinkron dengan daftar di
+// internal/httpapi/music.go supaya tidak ada berkas yang ditolak belakangan.
+export const AUDIO_EXTENSIONS = ['mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'flac', 'weba']
+
+// audioAcceptValue nilai atribut accept untuk <input type="file">.
+export const audioAcceptValue = AUDIO_EXTENSIONS.map((ext) => `.${ext}`).join(',')
+
+// isAudioFile memeriksa berkas berdasarkan ekstensi namanya.
+export function isAudioFile(name: string): boolean {
+  const dot = name.lastIndexOf('.')
+  if (dot < 0) return false
+  return AUDIO_EXTENSIONS.includes(name.slice(dot + 1).toLowerCase())
+}
+
+// formatBytes ukuran berkas menjadi teks pendek berbahasa Indonesia.
+export function formatBytes(bytes: number): string {
+  const value = Number.isFinite(bytes) ? Math.max(0, bytes) : 0
+  if (value < 1024) return `${Math.round(value)} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`
+  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+// trackExtension memberi keterangan jenis lagu untuk ditampilkan di daftar.
+export function trackSourceLabel(track: Track): string {
+  if (track.kind === 'LOCAL') return 'Berkas lokal'
+  return track.artist || 'YouTube'
 }
 
 export function formatClock(seconds: number): string {

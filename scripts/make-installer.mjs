@@ -36,12 +36,26 @@ const candidates = [
   'C:\\Program Files\\NSIS\\makensis.exe'
 ].filter(Boolean)
 
+// Spawn makensis lewat shell dengan jalur berkutip: spasi pada "Program Files
+// (x86)" tidak boleh dipecah menjadi argumen terpisah.
+//
+// Opsi memakai satu tanda hubung (mis. -VERSION), bukan garis miring: Git Bash di
+// Windows menerjemahkan argumen bergaris miring yang mirip jalur menjadi
+// "C:/Program Files/Git/VERSION" sehingga makensis membacanya sebagai berkas skrip.
+function runMakensis(args, stdio = 'inherit') {
+  return spawnSync(`"${makensis}" ${args.join(' ')}`, {
+    stdio,
+    windowsHide: true,
+    shell: true
+  })
+}
+
 let makensis = null
 for (const candidate of candidates) {
-  const probe = spawnSync(candidate, ['/VERSION'], { encoding: 'utf8', windowsHide: true })
+  const probe = runMakensis(['-VERSION'], 'pipe')
   if (!probe.error && probe.status === 0) {
     makensis = candidate
-    console.log(`NSIS ditemukan: ${candidate} (v${probe.stdout.trim()})`)
+    console.log(`NSIS ditemukan: ${candidate} (v${String(probe.stdout).trim()})`)
     break
   }
 }
@@ -61,17 +75,19 @@ const exe = path.join('bin', 'finova.exe')
 if (!fs.existsSync(exe)) fail(`Biner ${exe} tidak ditemukan.`)
 
 const script = path.join('build', 'windows', 'installer', 'finova.nsi')
-const srcExe = path.relative(path.dirname(script), exe)
+// Jalur absolut: makensis menyelesaikan `File` relatif terhadap folder skrip,
+// bukan folder kerja, sehingga jalur relatif dari sini mudah salah arah.
+const srcExe = path.resolve(exe)
 // makensis tidak membuat folder tujuan sendiri.
 fs.mkdirSync(path.join('build', 'bin'), { recursive: true })
 
 // makensis dipanggil dengan define agar versi hanya perlu ditulis satu kali.
 const args = [
-  `/DAppVersion=${version}`,
-  `/DSrcExe=${srcExe}`,
-  script
+  `-DAppVersion=${version}`,
+  `-DSrcExe=${srcExe}`,
+  `"${script}"`
 ]
-const result = spawnSync(makensis, args, { stdio: 'inherit', windowsHide: true })
+const result = runMakensis(args)
 if (result.status !== 0) fail('Pembuatan installer gagal.')
 
 const installer = path.join('build', 'bin', `Finova-Setup-${version}-amd64.exe`)

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { formatClock, nextTrackIndex, parseYouTubeInput } from './music.js'
+import {
+  audioAcceptValue, formatBytes, formatClock, isAudioFile,
+  nextTrackIndex, parseYouTubeInput, trackSourceLabel, type Track
+} from './music.js'
 
 describe('parseYouTubeInput', () => {
   it('menerima berbagai bentuk tautan YouTube', () => {
@@ -49,5 +52,48 @@ describe('nextTrackIndex', () => {
 
   it('mengembalikan -1 untuk daftar kosong', () => {
     expect(nextTrackIndex({ count: 0, current: 0, repeatOne: false, shuffle: false })).toBe(-1)
+  })
+})
+
+describe('isAudioFile', () => {
+  it('menerima format audio yang didukung', () => {
+    expect(isAudioFile('lagu.mp3')).toBe(true)
+    expect(isAudioFile('Album/Musik Malam.M4A')).toBe(true)
+    expect(isAudioFile('suara.opus')).toBe(true)
+    expect(isAudioFile('tanpa-nama.FLAC')).toBe(true)
+  })
+
+  it('menolak berkas yang bukan audio', () => {
+    expect(isAudioFile('laporan.xlsx')).toBe(false)
+    expect(isAudioFile('video.mp4')).toBe(false)
+    expect(isAudioFile('tanpa-ekstensi')).toBe(false)
+  })
+})
+
+describe('audioAcceptValue', () => {
+  it('memuat seluruh ekstensi yang didukung', () => {
+    const value = audioAcceptValue
+    expect(value).toContain('.mp3')
+    expect(value).toContain('.flac')
+    expect(value).toContain('.opus')
+  })
+})
+
+describe('formatBytes', () => {
+  it('menampilkan ukuran dalam satuan yang terbaca', () => {
+    expect(formatBytes(0)).toBe('0 B')
+    expect(formatBytes(512)).toBe('512 B')
+    expect(formatBytes(2048)).toBe('2 KB')
+    expect(formatBytes(5 * 1024 * 1024)).toBe('5.0 MB')
+    expect(formatBytes(Number.NaN)).toBe('0 B')
+  })
+})
+
+describe('trackSourceLabel', () => {
+  it('membedakan lagu lokal dari tautan YouTube', () => {
+    const local = { id: 1, kind: 'LOCAL', title: 'A', artist: 'Berkas lokal', position: 1 } as Track
+    const youtube = { id: 2, kind: 'YOUTUBE', title: 'B', artist: 'Kanal Resmi', position: 2 } as Track
+    expect(trackSourceLabel(local)).toBe('Berkas lokal')
+    expect(trackSourceLabel(youtube)).toBe('Kanal Resmi')
   })
 })

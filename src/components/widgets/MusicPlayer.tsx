@@ -1,37 +1,28 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ListMusic, Music2, Pause, Play, Plus, Repeat, Shuffle,
-  SkipBack, SkipForward, Trash2, Volume2, X
+  ListMusic, Music2, Pause, Play, Plus, Repeat, Shuffle, SkipBack,
+  SkipForward, Trash2, Upload, Volume2, X
 } from 'lucide-react'
 import { useYouTubePlayer } from '../../hooks/useYouTubePlayer.js'
 import {
-  formatClock, nextTrackIndex, parseYouTubeInput, youtubeThumbnail,
+  addYouTubeTrack, listTracks, removeTrack, uploadLocalTrack
+} from '../../services/musicLibrary.js'
+import {
+  audioAcceptValue, formatBytes, formatClock, isAudioFile, nextTrackIndex,
+  parseYouTubeInput, trackSourceLabel, youtubeThumbnail,
   type Track
 } from '../../utils/music.js'
 
 const YT_HOST_ID = 'finova-yt-host'
 const VOLUME_KEY = 'finova_music_volume'
 
-interface YouTubeMeta { title: string; artist: string }
-
-// lookupYouTubeMeta mengambil judul/pemegang hak lewat endpoint oEmbed publik
-// YouTube langsung dari peramban. Bila jaringan tidak tersedia, lagu tetap bisa
-// diputar dengan judul sementara berupa ID videonya.
-async function lookupYouTubeMeta(videoId: string): Promise<YouTubeMeta | null> {
-  try {
-    const watch = encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)
-    const response = await fetch(`https://www.youtube.com/oembed?format=json&url=${watch}`)
-    if (!response.ok) return null
-    const data = await response.json()
-    return { title: String(data.title || ''), artist: String(data.author_name || '') }
-  } catch {
-    return null
-  }
-}
-
 // Pemutar musik melayang di kanan atas: piringan hitam dengan sampul lagu
-// full-bleed yang berputar saat lagu jalan. Daftar putar bersifat sementara —
-// tidak ada lagu yang disimpan ke basis data maupun peramban.
+// full-bleed yang berputar saat lagu jalan.
+//
+// Pustaka lagu TERSIMPAN di server: berkas audio milik pengguna disalin ke folder
+// data aplikasi (tetap ada setelah aplikasi ditutup), sedangkan lagu YouTube
+// hanya menyimpan tautannya dan diputar lewat sematan resmi. Audio YouTube tidak
+// pernah diunduh atau disimpan ke disk.
 export function MusicPlayer({ notify }: { notify: (message: string, isError?: boolean) => void }): React.JSX.Element {
   const [tracks, setTracks] = useState<Track[]>([])
   const [index, setIndex] = useState(-1)
@@ -42,12 +33,42 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
   const [muted, setMuted] = useState(false)
   const [linkDraft, setLinkDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  const [libraryLoading, setLibraryLoading] = useState(true)
   const yt = useYouTubePlayer(YT_HOST_ID)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const current = index >= 0 && index < tracks.length ? tracks[index] : undefined
-  const playing = yt.playing
-  const duration = yt.duration
-  const position = yt.current
+  const isLocal = current?.kind === 'LOCAL'
+
+  // Keadaan pemutaran untuk lagu lokal (elemen audio HTML) dan YouTube berbeda
+  // sumbernya; disatukan di sini supaya panel hanya peduli satu pasang nilai.
+  const [localPlaying, setLocalPlaying] = useState(false)
+  const [localPosition, setLocalPosition] = useState(0)
+  const [localDuration, setLocalDuration] = useState(0)
+
+  const playing = isLocal ? localPlaying : yt.playing
+  const duration = isLocal ? localDuration : yt.duration
+  const position = isLocal ? localPosition : yt.current
+
+  // Muat pustaka tersimpan sekali saat pemutar dipasang.
+  useEffect(() => {
+    let cancelled = false
+    listTracks()
+      .then((saved) => {
+        if (!cancelled) setTracks(saved)
+      })
+      .catch(() => {
+        if (!cancelled) notify('Pustaka musik tidak dapat dimuat dari server.', true)
+      })
+      .finally(() => {
+        if (!cancelled) setLibraryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Penjaga: kalau permintaan putar tidak menghasilkan suara (kebijakan autoplay
   // lingkungan menolak iframe lintas-asal), beri tahu alih-alih diam saja.
@@ -55,25 +76,45 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
   const [blockedHint, setBlockedHint] = useState(false)
 
   useEffect(() => {
-    if (!playToken) return undefined
+    if (!playToken || isLocal) return undefined
     setBlockedHint(false)
-    if (playing || yt.error) return undefined
+    if (yt.playing || yt.error) return undefined
     const timer = window.setTimeout(() => setBlockedHint(true), 3500)
     return () => window.clearTimeout(timer)
-  }, [playToken, playing, yt.error])
+  }, [playToken, isLocal, yt.playing, yt.error])
 
   useEffect(() => {
     localStorage.setItem(VOLUME_KEY, String(volume))
+    if (audioRef.current) audioRef.current.volume = (muted ? 0 : volume) / 100
     yt.setVolume(muted ? 0 : volume)
   }, [volume, muted, yt])
+
+  // Menjatuhkan lagu lokal mematikan pemutar YouTube supaya tidak ada dua suara.
+  const stopOtherEngine = useCallback((keep: 'LOCAL' | 'YOUTUBE') => {
+    if (keep !== 'YOUTUBE') yt.pause()
+    if (keep !== 'LOCAL' && audioRef.current) audioRef.current.pause()
+  }, [yt])
 
   const playTrack = useCallback((wanted: number) => {
     const track = tracks[wanted]
     if (!track) return
     setIndex(wanted)
+    setBlockedHint(false)
+
+    if (track.kind === 'LOCAL') {
+      stopOtherEngine('LOCAL')
+      setLocalPlaying(false)
+      setLocalPosition(0)
+      setLocalDuration(track.duration || 0)
+      setPlayToken((value) => value + 1)
+      // Elemen audio sudah dimuat ulang lewat perubahan src; play dipicu effect.
+      return
+    }
+
+    stopOtherEngine('YOUTUBE')
     setPlayToken((value) => value + 1)
-    yt.load(track.youtubeId, true)
-  }, [tracks, yt])
+    if (track.youtubeId) yt.load(track.youtubeId, true)
+  }, [tracks, yt, stopOtherEngine])
 
   const advance = useCallback((direction: 1 | -1) => {
     if (!tracks.length) return
@@ -94,9 +135,39 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
     return () => window.removeEventListener('finova:track-ended', onEnded)
   }, [advance])
 
+  // Setelah src berganti ke lagu lokal, mulai pemutarannya. Dipisah dari
+  // playTrack supaya elemen sudah menerima sumber baru sebelum diputar.
+  useEffect(() => {
+    if (!isLocal || !current?.audioUrl) return
+    const audio = audioRef.current
+    if (!audio) return
+    audio.volume = (muted ? 0 : volume) / 100
+    void audio.play().then(
+      () => setLocalPlaying(true),
+      () => {
+        setLocalPlaying(false)
+        setBlockedHint(true)
+      }
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id, current?.audioUrl, isLocal])
+
   const togglePlay = useCallback(() => {
     if (!current) {
       if (tracks.length) playTrack(0)
+      return
+    }
+    if (isLocal) {
+      const audio = audioRef.current
+      if (!audio) return
+      if (audio.paused) {
+        void audio.play().then(
+          () => setLocalPlaying(true),
+          () => setBlockedHint(true)
+        )
+      } else {
+        audio.pause()
+      }
       return
     }
     if (yt.playing) yt.pause()
@@ -104,7 +175,19 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
       setPlayToken((value) => value + 1)
       yt.play()
     }
-  }, [current, tracks.length, playTrack, yt])
+  }, [current, tracks.length, playTrack, isLocal, yt])
+
+  const seek = useCallback((seconds: number) => {
+    if (isLocal) {
+      const audio = audioRef.current
+      if (audio) {
+        audio.currentTime = seconds
+        setLocalPosition(seconds)
+      }
+      return
+    }
+    yt.seek(seconds)
+  }, [isLocal, yt])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -128,6 +211,7 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [togglePlay, advance])
 
+  // Tambah tautan YouTube ke pustaka tersimpan.
   async function addLink(event: React.FormEvent) {
     event.preventDefault()
     const videoId = parseYouTubeInput(linkDraft)
@@ -135,62 +219,132 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
       notify('Tempel tautan YouTube yang benar, mis. https://youtu.be/dsuJZx24V_A', true)
       return
     }
-    const existing = tracks.findIndex((track) => track.youtubeId === videoId)
+    const existing = tracks.findIndex((track) => track.kind === 'YOUTUBE' && track.youtubeId === videoId)
     if (existing >= 0) {
       playTrack(existing)
       setLinkDraft('')
       setPanelOpen(true)
+      notify('Lagu ini sudah ada di pustaka — diputar dari daftar.')
       return
     }
 
-    // Pemutaran HARUS dipanggil masih di dalam genggaman klik pengguna. Jika
-    // menunggu metadata dulu, aktivasi pengguna habis dan kebijakan autoplay
-    // peramban menolak suaranya - piringan pun tidak berputar. Judul dan
-    // penyanyi diisi menyusul begitu oEmbed menjawab.
-    const track: Track = {
-      key: `yt:${videoId}`,
-      title: videoId,
-      artist: 'YouTube',
-      youtubeId: videoId,
-      thumbnail: youtubeThumbnail(videoId)
-    }
-    setTracks((prev) => [...prev, track])
-    setIndex(tracks.length)
-    setLinkDraft('')
-    setPlayToken((value) => value + 1)
-    yt.load(videoId, true)
-
     setBusy(true)
     try {
-      const meta = await lookupYouTubeMeta(videoId)
-      if (meta) {
-        setTracks((prev) => prev.map((item) => (item.key === track.key ? { ...item, title: meta.title, artist: meta.artist } : item)))
-        notify(`Memutar "${meta.title}".`)
+      const saved = await addYouTubeTrack(linkDraft.trim())
+      const wanted = tracks.length
+      setTracks((prev) => [...prev, saved])
+      setIndex(wanted)
+      setLinkDraft('')
+      if (saved.youtubeId) {
+        setPlayToken((value) => value + 1)
+        yt.load(saved.youtubeId, true)
+      }
+      notify(`Tersimpan di pustaka: "${saved.title}".`)
+    } catch (error: any) {
+      notify(error?.message || 'Tautan YouTube tidak dapat disimpan.', true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Impor berkas audio milik pengguna; berkas disalin ke penyimpanan aplikasi.
+  async function importFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(event.target.files || [])
+    event.target.value = ''
+    if (!picked.length) return
+
+    const accepted = picked.filter((file) => isAudioFile(file.name))
+    const rejected = picked.length - accepted.length
+    if (rejected > 0) {
+      notify(`${rejected} berkas dilewati karena bukan format audio yang didukung.`, true)
+    }
+    if (!accepted.length) return
+
+    setBusy(true)
+    let savedCount = 0
+    let lastSaved: Track | null = null
+    try {
+      for (const file of accepted) {
+        try {
+          const saved = await uploadLocalTrack(file)
+          lastSaved = saved
+          savedCount += 1
+          setTracks((prev) => [...prev, saved])
+        } catch (error: any) {
+          notify(`"${file.name}" gagal diimpor: ${error?.message || 'kesalahan tidak dikenal'}`, true)
+        }
+      }
+      if (savedCount > 0) {
+        notify(`${savedCount} lagu tersimpan permanen di pustaka musik.`)
+        if (lastSaved) {
+          // Daftar sudah ditambahkan di atas; lagu terakhir langsung diputar.
+          const wanted = tracks.length + savedCount - 1
+          setIndex(wanted)
+          if (lastSaved.kind === 'LOCAL') {
+            setLocalPlaying(false)
+            setLocalPosition(0)
+            setLocalDuration(lastSaved.duration || 0)
+          }
+        }
       }
     } finally {
       setBusy(false)
     }
   }
 
-  function removeTrack(key: string) {
-    setTracks((prev) => {
-      const removed = prev.findIndex((track) => track.key === key)
-      const next = prev.filter((track) => track.key !== key)
-      if (removed >= 0 && removed === index) {
-        yt.pause()
-        setIndex(-1)
-      } else if (removed >= 0 && removed < index) {
-        setIndex((value) => value - 1)
-      }
-      return next
-    })
+  async function removeSaved(track: Track) {
+    const removedIndex = tracks.findIndex((item) => item.id === track.id)
+    try {
+      await removeTrack(track.id)
+    } catch (error: any) {
+      notify(error?.message || 'Lagu tidak dapat dihapus dari pustaka.', true)
+      return
+    }
+    setTracks((prev) => prev.filter((item) => item.id !== track.id))
+    if (removedIndex === index) {
+      if (isLocal) audioRef.current?.pause()
+      else yt.pause()
+      setLocalPlaying(false)
+      setIndex(-1)
+    } else if (removedIndex >= 0 && removedIndex < index) {
+      setIndex((value) => value - 1)
+    }
+    notify('Lagu dihapus dari pustaka.')
   }
 
-  const labelStyle = current?.thumbnail ? { backgroundImage: `url("${current.thumbnail}")` } : undefined
+  const labelStyle = useMemo(
+    () => (current?.thumbnail ? { backgroundImage: `url("${current.thumbnail}")` } : undefined),
+    [current?.thumbnail]
+  )
+
+  const hasLocal = tracks.some((track) => track.kind === 'LOCAL')
 
   return (
     <>
       <div id={YT_HOST_ID} className="music-host" aria-hidden="true" />
+
+      {/* Elemen audio untuk lagu lokal; sumbernya diganti lewat atribut src. */}
+      <audio
+        ref={audioRef}
+        src={isLocal ? current?.audioUrl : ''}
+        preload="metadata"
+        onPlay={() => setLocalPlaying(true)}
+        onPause={() => setLocalPlaying(false)}
+        onEnded={() => {
+          setLocalPlaying(false)
+          advance(1)
+        }}
+        onTimeUpdate={(event) => setLocalPosition(event.currentTarget.currentTime)}
+        onLoadedMetadata={(event) => {
+          const value = event.currentTarget.duration
+          if (Number.isFinite(value)) setLocalDuration(value)
+        }}
+        onError={() => {
+          if (!isLocal) return
+          setLocalPlaying(false)
+          notify('Berkas audio lagu ini tidak dapat diputar.', true)
+        }}
+      />
 
       <div className="music-fab no-print" role="group" aria-label="Pemutar musik">
         <button
@@ -206,8 +360,8 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
         <button
           className="mini-open"
           onClick={() => setPanelOpen((value) => !value)}
-          title="Daftar putar"
-          aria-label="Daftar putar musik"
+          title="Pustaka musik"
+          aria-label="Pustaka musik"
           aria-expanded={panelOpen}
         >
           <ListMusic size={13} />
@@ -216,7 +370,7 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
         {panelOpen && (
           <div className="music-card">
             <div className="music-head">
-              <strong>Pemutar musik</strong>
+              <strong>Pustaka musik</strong>
               <button className="icon-button" onClick={() => setPanelOpen(false)} title="Tutup panel" aria-label="Tutup panel musik">
                 <X size={13} />
               </button>
@@ -224,9 +378,9 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
 
             <div className="music-info">
               <strong title={current?.title}>{current ? current.title : 'Belum ada lagu'}</strong>
-              <small>{current ? current.artist : 'Tempel tautan YouTube di bawah untuk mulai memutar'}</small>
-              {yt.error && <em className="music-error">{yt.error}</em>}
-              {blockedHint && !yt.error && (
+              <small>{current ? trackSourceLabel(current) : 'Impor berkas audio atau tempel tautan YouTube di bawah'}</small>
+              {!isLocal && yt.error && <em className="music-error">{yt.error}</em>}
+              {blockedHint && !(yt.error && !isLocal) && (
                 <em className="music-error">Belum terdengar suaranya — klik piringan atau tombol putar untuk memulai.</em>
               )}
             </div>
@@ -237,7 +391,7 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
                 min={0}
                 max={Math.max(1, duration)}
                 value={Math.min(position, Math.max(0, duration))}
-                onChange={(event) => yt.seek(Number(event.target.value))}
+                onChange={(event) => seek(Number(event.target.value))}
                 disabled={!current || !duration}
                 aria-label="Posisi lagu"
               />
@@ -270,6 +424,28 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
               </div>
             </div>
 
+            <div className="music-import">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={audioAcceptValue}
+                multiple
+                onChange={(event) => void importFiles(event)}
+                className="music-file-input"
+                aria-label="Pilih berkas audio untuk diimpor"
+              />
+              <button
+                type="button"
+                className="button secondary small"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy}
+                title="Impor berkas audio milik Anda (mp3, m4a, ogg, wav, flac)"
+              >
+                <Upload size={13} /> Impor berkas audio
+              </button>
+              <small className="music-import-hint">Disalin ke penyimpanan aplikasi dan tetap ada setelah ditutup.</small>
+            </div>
+
             <form className="music-add" onSubmit={(event) => void addLink(event)}>
               <input
                 type="url"
@@ -279,31 +455,48 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
                 aria-label="Tautan YouTube"
               />
               <button type="submit" className="button secondary small" disabled={busy || !linkDraft.trim()}>
-                <Plus size={13} /> Putar
+                <Plus size={13} /> Simpan
               </button>
             </form>
 
             <ol className="music-list">
-              {tracks.length === 0 && <li className="music-empty">Daftar putar kosong — lagu yang diputar tidak disimpan.</li>}
+              {libraryLoading && <li className="music-empty">Memuat pustaka musik…</li>}
+              {!libraryLoading && tracks.length === 0 && (
+                <li className="music-empty">Pustaka kosong — impor berkas audio atau simpan tautan YouTube.</li>
+              )}
               {tracks.map((track, wanted) => (
-                <li key={track.key} className={wanted === index ? 'active' : ''}>
+                <li key={track.id} className={wanted === index ? 'active' : ''}>
                   <button className="music-row" onClick={() => playTrack(wanted)} title="Putar lagu ini">
                     <span className="music-row-art">
-                      <img src={track.thumbnail} alt="" loading="lazy" />
+                      {track.thumbnail
+                        ? <img src={track.thumbnail} alt="" loading="lazy" />
+                        : <Music2 size={14} className="music-row-art-fallback" />}
                     </span>
                     <span className="music-row-text">
                       <strong>{track.title}</strong>
-                      <small>{track.artist}</small>
+                      <small>
+                        {trackSourceLabel(track)}
+                        {track.kind === 'LOCAL' && track.sizeBytes
+                          ? ` · ${formatBytes(track.sizeBytes)}`
+                          : ''}
+                      </small>
                     </span>
                   </button>
                   <span className="music-row-actions">
-                    <button className="icon-button" onClick={() => removeTrack(track.key)} title="Hapus dari daftar putar" aria-label="Hapus lagu">
+                    <button className="icon-button" onClick={() => void removeSaved(track)} title="Hapus dari pustaka" aria-label="Hapus lagu">
                       <Trash2 size={13} />
                     </button>
                   </span>
                 </li>
               ))}
             </ol>
+
+            {hasLocal && (
+              <p className="music-note">
+                Lagu lokal tersimpan di folder data aplikasi. Tautan YouTube hanya menyimpan alamatnya —
+                audionya diputar lewat pemutar resmi YouTube, tidak pernah disalin ke komputer.
+              </p>
+            )}
           </div>
         )}
       </div>

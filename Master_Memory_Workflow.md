@@ -41,6 +41,16 @@ verbatim: arsipnya masih memuat angka/aturan yang sudah diganti (`PORT=5199`,
 `http://localhost:3000`, pintasan `Ctrl+K`, mode gelap, `Finova-Setup-1.0.0-amd64.exe`,
 `finova.exe` 17,4 MiB). Bila arsip dan bagian R1–R6 bentrok, **R1–R6 dokumen ini yang berlaku**.
 
+**Koreksi 2026-09-27 (berlaku atas R3.6 versi lama):** penyimpanan musik **dihidupkan kembali**,
+tetapi tetap tanpa melanggar ToS YouTube. Pustaka musik kini **persisten**:
+lagu lokal milik pengguna disalin ke `<DataDir>/music` lewat `/api/music/local` (tetap ada
+setelah aplikasi ditutup), sedangkan lagu YouTube hanya menyimpan **tautan** di tabel
+`music_tracks` dan diputar lewat sematan IFrame resmi. Audio YouTube **tetap tidak pernah**
+diunduh atau disimpan ke disk: lagu tautan tidak punya `audioUrl` dan `/api/music/{id}/media`
+membalas 404 untuknya. Permintaan user 27 Sep ("simpan musik hasil unduhan dari link YouTube")
+diklarifikasi lebih dulu; user memilih jalur sah ini, bukan pengunduhan audio. Rincian jebakan
+teknis ada di `.workbuddy-ai/memory/2026-09-27.md` (parsing skema, makensis, sandbox).
+
 ## R1. Angka Kunci
 
 | Aspek | Nilai |

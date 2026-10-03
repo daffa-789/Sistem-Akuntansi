@@ -171,7 +171,37 @@ INSERT OR IGNORE INTO accounts (company_id, code, name, account_group, account_s
   (1, '5800', 'Beban Iklan & Promosi', 'EXPENSE', 'MARKETING', 'DEBIT', 'OPERATING', 0),
   (1, '5900', 'Beban Operasional Lain-lain', 'EXPENSE', 'OTHER_EXPENSE', 'DEBIT', 'OPERATING', 0);
 
--- ===== Migrasi: tabel musik dihapus =====
--- Pemutar musik tidak lagi menyimpan lagu di basis data pembukuan. Tabel lama
--- dihapus bila masih ada di berkas SQLite pengguna (aman dipanggil berulang).
-DROP TABLE IF EXISTS music_tracks;
+-- ===== Pustaka musik =====
+-- Dua jenis lagu hidup berdampingan di satu tabel.
+--   kind LOCAL   -> berkas audio MILIK PENGGUNA sendiri yang diimpor dari disk
+--                   (mp3/m4a/ogg/opus/wav/flac). Isinya disalin ke folder data
+--                   aplikasi (subfolder music) agar tetap ada setelah ditutup,
+--                   dan kolom file_name hanya nama berkas, bukan jalur penuh.
+--   kind YOUTUBE -> hanya TAUTAN video resmi. Audio YouTube TIDAK PERNAH disalin
+--                   atau disimpan ke disk. Pemutaran lewat penyematan IFrame resmi,
+--                   lihat internal/httpapi/music.go dan src/utils/music.ts.
+-- Catatan gaya: komentar di berkas ini tidak boleh memuat titik koma maupun tanda
+-- kutip tunggal yang ganjil, karena pemisah pernyataan sederhana di internal/db
+-- mengikuti kutipan dan akan memecah pernyataan di tempat yang salah.
+CREATE TABLE IF NOT EXISTS music_tracks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'YOUTUBE',
+  title TEXT NOT NULL,
+  artist TEXT NULL,
+  youtube_id TEXT NULL,
+  thumbnail_url TEXT NULL,
+  file_name TEXT NULL,
+  file_bytes INTEGER NOT NULL DEFAULT 0,
+  duration REAL NULL,
+  added_by INTEGER REFERENCES users(id),
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_music_tracks_position ON music_tracks(company_id, position, id);
+
+-- Satu video YouTube hanya boleh muncul sekali, sedangkan lagu lokal boleh
+-- berulang karena dua berkas berbeda bisa punya judul yang sama.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_music_tracks_youtube
+  ON music_tracks(company_id, youtube_id) WHERE youtube_id IS NOT NULL;

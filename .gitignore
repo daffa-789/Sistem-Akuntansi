@@ -11,6 +11,7 @@ coverage/
 
 # Ruang kerja sementara agent (spike, screenshot, skrip uji sekali pakai)
 .scratch/
+.workbuddy-ai/
 
 # Basis data lokal (skema SQLite kini ikut version control di internal/db/schema)
 database/*.sqlite

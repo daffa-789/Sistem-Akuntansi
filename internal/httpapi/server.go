@@ -121,6 +121,16 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/templates", s.handle(s.postTemplate))
 	mux.HandleFunc("DELETE /api/templates/{id}", s.handle(s.deleteTemplate))
 
+	// Pustaka musik: daftar lagu tersimpan lintas-sesi. Lagu lokal (milik pengguna)
+	// disimpan di folder data aplikasi dan dialirkan lewat /media; tautan YouTube
+	// hanya disimpan sebagai tautan, audionya tidak pernah disalin ke disk.
+	mux.HandleFunc("GET /api/music", s.handle(s.listTracks))
+	mux.HandleFunc("POST /api/music/youtube", s.handle(s.postYouTubeTrack))
+	mux.HandleFunc("POST /api/music/local", s.handle(s.postLocalTrack))
+	mux.HandleFunc("PUT /api/music/order", s.handle(s.putTrackOrder))
+	mux.HandleFunc("GET /api/music/{id}/media", s.handle(s.streamTrack))
+	mux.HandleFunc("DELETE /api/music/{id}", s.handle(s.deleteTrack))
+
 	mux.HandleFunc("GET /api", s.handle(s.notFound))
 	mux.HandleFunc("/", s.handle(s.notFound))
 }
