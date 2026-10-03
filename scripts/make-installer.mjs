@@ -42,8 +42,8 @@ const candidates = [
 // Opsi memakai satu tanda hubung (mis. -VERSION), bukan garis miring: Git Bash di
 // Windows menerjemahkan argumen bergaris miring yang mirip jalur menjadi
 // "C:/Program Files/Git/VERSION" sehingga makensis membacanya sebagai berkas skrip.
-function runMakensis(args, stdio = 'inherit') {
-  return spawnSync(`"${makensis}" ${args.join(' ')}`, {
+function runMakensis(args, stdio = 'inherit', bin = makensis) {
+  return spawnSync(`"${bin}" ${args.join(' ')}`, {
     stdio,
     windowsHide: true,
     shell: true
@@ -52,7 +52,7 @@ function runMakensis(args, stdio = 'inherit') {
 
 let makensis = null
 for (const candidate of candidates) {
-  const probe = runMakensis(['-VERSION'], 'pipe')
+  const probe = runMakensis(['-VERSION'], 'pipe', candidate)
   if (!probe.error && probe.status === 0) {
     makensis = candidate
     console.log(`NSIS ditemukan: ${candidate} (v${String(probe.stdout).trim()})`)
@@ -83,8 +83,8 @@ fs.mkdirSync(path.join('build', 'bin'), { recursive: true })
 
 // makensis dipanggil dengan define agar versi hanya perlu ditulis satu kali.
 const args = [
-  `-DAppVersion=${version}`,
-  `-DSrcExe=${srcExe}`,
+  `-DAppVersion="${version}"`,
+  `-DSrcExe="${srcExe}"`,
   `"${script}"`
 ]
 const result = runMakensis(args)
