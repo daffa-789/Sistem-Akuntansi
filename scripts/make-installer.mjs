@@ -78,6 +78,7 @@ const script = path.join('build', 'windows', 'installer', 'finova.nsi')
 // Jalur absolut: makensis menyelesaikan `File` relatif terhadap folder skrip,
 // bukan folder kerja, sehingga jalur relatif dari sini mudah salah arah.
 const srcExe = path.resolve(exe)
+const srcIcon = path.resolve('build', 'windows', 'icon.ico')
 // makensis tidak membuat folder tujuan sendiri.
 fs.mkdirSync(path.join('build', 'bin'), { recursive: true })
 
@@ -85,6 +86,7 @@ fs.mkdirSync(path.join('build', 'bin'), { recursive: true })
 const args = [
   `-DAppVersion="${version}"`,
   `-DSrcExe="${srcExe}"`,
+  `-DIconFile="${srcIcon}"`,
   `"${script}"`
 ]
 const result = runMakensis(args)

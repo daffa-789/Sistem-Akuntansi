@@ -79,12 +79,13 @@ Section "Finova" SecMain
 
   SetOutPath "$INSTDIR"
   File "${SrcExe}"
+  File /oname=icon.ico "${IconFile}"
   File /oname=catatan.txt "catatan.txt"
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
   CreateDirectory "$SMPROGRAMS\Finova"
-  CreateShortcut "$SMPROGRAMS\Finova\Finova.lnk" "$INSTDIR\finova.exe" "-app" "$INSTDIR\finova.exe" 0
-  CreateShortcut "$SMPROGRAMS\Finova\Finova (dengan konsol).lnk" "$INSTDIR\finova.exe" "-no-browser" "$INSTDIR\finova.exe" 0
+  CreateShortcut "$SMPROGRAMS\Finova\Finova.lnk" "$INSTDIR\finova.exe" "-app" "$INSTDIR\icon.ico" 0
+  CreateShortcut "$SMPROGRAMS\Finova\Finova (dengan konsol).lnk" "$INSTDIR\finova.exe" "-no-browser" "$INSTDIR\icon.ico" 0
   CreateShortcut "$SMPROGRAMS\Finova\Hentikan Finova.lnk" "$SYSDIR\taskkill.exe" "/F /IM finova.exe" "$SYSDIR\taskkill.exe" 0
   CreateShortcut "$SMPROGRAMS\Finova\Lepas Finova.lnk" "$INSTDIR\uninstall.exe"
 
@@ -99,7 +100,7 @@ Section "Finova" SecMain
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova" "InstallSource" "$EXEDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova" "DisplayIcon" "$INSTDIR\finova.exe,0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova" "DisplayIcon" "$INSTDIR\icon.ico"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova" "EstimatedSize" $0
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova" "NoRepair" 1
@@ -107,7 +108,7 @@ SectionEnd
 
 Section "Pintasan di Desktop" SecDesktop
   StrCpy $DesktopShortcut "1"
-  CreateShortcut "$DESKTOP\Finova.lnk" "$INSTDIR\finova.exe" "-app" "$INSTDIR\finova.exe" 0
+  CreateShortcut "$DESKTOP\Finova.lnk" "$INSTDIR\finova.exe" "-app" "$INSTDIR\icon.ico" 0
 SectionEnd
 
 ; ----------------------------- Uninstall -----------------------------------
