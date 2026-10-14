@@ -1,0 +1,48 @@
+[package]
+name = "finova"
+version = "1.0.0"
+edition = "2021"
+authors = ["Finova"]
+description = "Sistem Akuntansi Web Terpadu Indonesia — backend Rust Native (Axum + SQLite) dengan frontend React embedded"
+
+[[bin]]
+name = "finova"
+path = "src-rust/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["json", "multipart"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+rust-embed = "8.13"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rust_xlsxwriter = "0.99"
+calamine = "0.36"
+printpdf = "0.12"
+webbrowser = "1.2"
+wry = "0.57"
+sha2 = "0.10"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+mime_guess = "2.0"
+regex = "1.10"
+windows-sys = { version = "0.59", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_System_Console",
+    "Win32_UI_Shell",
+    "Win32_Graphics_Gdi"
+] }
+tao = "0.37.1"
+
+[build-dependencies]
+winres = "0.1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

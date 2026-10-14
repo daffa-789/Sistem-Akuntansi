@@ -26,8 +26,8 @@ function filteredProcessEnv() {
   return out
 }
 
-if (!fs.existsSync('go.mod')) {
-  console.error('go.mod tidak ditemukan: jalankan dari folder proyek Finova.')
+if (!fs.existsSync('Cargo.toml')) {
+  console.error('Cargo.toml tidak ditemukan: jalankan dari folder proyek Finova.')
   process.exit(1)
 }
 if (!fs.existsSync(vite)) {
@@ -51,7 +51,7 @@ function watch(child, label) {
   children.push(child)
   child.on('error', (error) => {
     console.error(`Gagal memulai ${label}: ${error.message}`)
-    console.error('Pastikan Go terpasang: https://go.dev/dl/ (cek dengan `go version`).')
+    console.error('Pastikan Rust terpasang: https://rustup.rs (cek dengan `cargo --version`).')
     stop(1)
   })
   child.on('exit', (code, signal) => {
@@ -64,20 +64,20 @@ function watch(child, label) {
   })
 }
 
-console.log('[dev] backend Go diminta berjalan lebih dulu supaya port-nya dapat dibaca Vite...')
+console.log('[dev] backend Rust diminta berjalan lebih dulu supaya port-nya dapat dibaca Vite...')
 
-const goBin = isWindows ? 'go.exe' : 'go'
-const goChild = spawn(goBin, ['run', './cmd/finova', '-no-browser'], {
+const cargoBin = isWindows ? 'cargo.exe' : 'cargo'
+const rustChild = spawn(cargoBin, ['run', '--', '-no-browser'], {
   stdio: ['ignore', 'pipe', 'inherit'],
   windowsHide: true,
   env
 })
-watch(goChild, 'backend Go')
+watch(rustChild, 'backend Rust')
 
-// Sambil menunggu, keluaran Go tetap ditampilkan apa adanya.
-waitForMarker(goChild.stdout, /Finova siap di http:\/\/127\.0\.0\.1:(\d+)/, 240000)
+// Sambil menunggu, keluaran Rust tetap ditampilkan apa adanya.
+waitForMarker(rustChild.stdout, /Finova siap di http:\/\/127\.0\.0\.1:(\d+)/, 240000)
   .then((apiPort) => {
-    console.log(`[dev] API Go      -> http://127.0.0.1:${apiPort}`)
+    console.log(`[dev] API Rust    -> http://127.0.0.1:${apiPort}`)
     console.log('[dev] memulai Vite (port juga otomatis)...')
     const viteChild = spawn(process.execPath, [vite], {
       stdio: ['ignore', 'pipe', 'inherit'],

@@ -54,8 +54,8 @@ export function AppShell({
     <div className="app-shell">
       <aside className="sidebar" aria-label="Menu Aplikasi">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <Landmark />
+          <span className="brand-mark" aria-hidden="true" style={{ background: 'transparent', boxShadow: 'none' }}>
+            <img src="/favicon.png" alt="Finova Logo" style={{ width: 34, height: 34, borderRadius: 9, boxShadow: '0 4px 12px rgba(6, 182, 212, 0.35)' }} />
           </span>
           Finova
         </div>

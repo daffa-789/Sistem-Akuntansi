@@ -9,7 +9,7 @@ const outPath = path.join('bin', outName)
 
 if (!fs.existsSync(outPath)) {
   console.log('Biner belum ada, membangun dulu...')
-  const built = spawnSync('node', ['scripts/build-go.mjs'], { stdio: 'inherit', windowsHide: true })
+  const built = spawnSync('node', ['scripts/build-rust.mjs'], { stdio: 'inherit', windowsHide: true })
   if (built.status !== 0) process.exit(built.status ?? 1)
 }
 

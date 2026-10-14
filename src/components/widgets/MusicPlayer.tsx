@@ -15,6 +15,7 @@ import {
 
 const YT_HOST_ID = 'finova-yt-host'
 const VOLUME_KEY = 'finova_music_volume'
+const LAST_TRACK_KEY = 'finova_last_track_id'
 
 // Pemutar musik melayang di kanan atas: piringan hitam dengan sampul lagu
 // full-bleed yang berputar saat lagu jalan.
@@ -56,7 +57,15 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
     let cancelled = false
     listTracks()
       .then((saved) => {
-        if (!cancelled) setTracks(saved)
+        if (!cancelled) {
+          setTracks(saved)
+          if (saved.length > 0) {
+            const lastId = localStorage.getItem(LAST_TRACK_KEY)
+            const foundIdx = lastId ? saved.findIndex((t) => String(t.id) === lastId) : 0
+            const targetIdx = foundIdx >= 0 ? foundIdx : 0
+            setIndex(targetIdx)
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) notify('Pustaka musik tidak dapat dimuat dari server.', true)
@@ -99,6 +108,9 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
     const track = tracks[wanted]
     if (!track) return
     setIndex(wanted)
+    if (track.id) {
+      localStorage.setItem(LAST_TRACK_KEY, String(track.id))
+    }
     setBlockedHint(false)
 
     if (track.kind === 'LOCAL') {
