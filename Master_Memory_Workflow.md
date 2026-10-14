@@ -126,6 +126,16 @@ sehingga tidak ada satu baris pun kode React/API yang berubah untuk mode desktop
    selama sesi (hilang saat aplikasi ditutup); hanya volume di `localStorage`. Impor berkas audio dan
    penyimpanan lagu dihapus atas permintaan user. Bila diminta "unduh lagu/ekspor MP3 dari link YouTube":
    tolak bagian unduhnya, tawarkan jalur sah.
+   **Koreksi 2026-09-27:** penyimpanan musik **dihidupkan kembali** (tabel `music_tracks`, lagu lokal
+   ke `<DataDir>/music`, tautan YouTube hanya sebagai tautan) — lihat R3.6 di atas.
+   **Perbaikan 2026-10-14** ("tidak bisa diputar"): penyebabnya **bukan** kode pemutar. Video yang
+   pemiliknya **menonaktifkan penyematan** selalu balas `UNPLAYABLE` dari `youtubei/v1/player` (kode
+   galat 101/150) walau oEmbed masih 200 — halaman watch tetap `OK`, jadi jalan keluar sah = **buka di
+   peramban sistem**. Ditambah: endpoint `POST /api/music/open-external` + tombol "Buka di YouTube" di
+   UI, dan oEmbed backend **dulu stub mati** (`mod ureq` selalu gagal → judul "YouTube <id>") sekarang
+   fetch sungguhan dengan `ureq = "3"` (API ureq 3: `Agent::config_builder()` untuk timeout,
+   `body.read_to_string()` untuk isi — JANGAN pakai `RequestBuilder::timeout`/`into_string` gaya ureq 2).
+   Diagnosa & uji 5/5 LULUS tercatat di `.workbuddy-ai/memory/2026-10-14.md`.
 7. **Ukuran biner sudah diaudit** — tiga opsi pemangkasan (UPX, lepas recharts, gzip aset web)
    **ditolak user 2026-09-23**. Kalau topik ini muncul lagi: tunjukkan tabel R1, jangan audit ulang.
    Breakdown: Go runtime ±1,2 MiB · `net/http`+TLS/HTTP2 ±5,6 · `modernc.org/sqlite` ±5,0 ·

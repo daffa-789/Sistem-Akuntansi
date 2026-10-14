@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ListMusic, Music2, Pause, Play, Plus, Repeat, Shuffle, SkipBack,
-  SkipForward, Trash2, Upload, Volume2, X
+  ExternalLink, ListMusic, Music2, Pause, Play, Plus, RefreshCw, Repeat, Shuffle,
+  SkipBack, SkipForward, Trash2, Upload, Volume2, X
 } from 'lucide-react'
 import { useYouTubePlayer } from '../../hooks/useYouTubePlayer.js'
 import {
-  addYouTubeTrack, listTracks, removeTrack, uploadLocalTrack
+  addYouTubeTrack, listTracks, openOnYouTube, refreshTrackMetadata, removeTrack, uploadLocalTrack
 } from '../../services/musicLibrary.js'
 import {
   audioAcceptValue, formatBytes, formatClock, isAudioFile, nextTrackIndex,
@@ -16,6 +16,12 @@ import {
 const YT_HOST_ID = 'finova-yt-host'
 const VOLUME_KEY = 'finova_music_volume'
 const LAST_TRACK_KEY = 'finova_last_track_id'
+
+// Judul cadangan yang dipakai server saat oEmbed gagal (mis. saat ditambah
+// tanpa internet). Bentuknya selalu "YouTube <id-11-karakter>".
+const PLACEHOLDER_TITLE = /^YouTube [A-Za-z0-9_-]{11}$/
+
+const isPlaceholderTitle = (track: Track): boolean => PLACEHOLDER_TITLE.test(track.title)
 
 // Pemutar musik melayang di kanan atas: piringan hitam dengan sampul lagu
 // full-bleed yang berputar saat lagu jalan.
@@ -247,9 +253,19 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
       setTracks((prev) => [...prev, saved])
       setIndex(wanted)
       setLinkDraft('')
-      if (saved.youtubeId) {
+      if (saved.kind === 'YOUTUBE' && saved.youtubeId) {
         setPlayToken((value) => value + 1)
         yt.load(saved.youtubeId, true)
+        // Kalau judul masih cadangan (oEmbed gagal saat menambah), coba sekali
+        // lagi sekarang — biasanya jaringan sudah stabil.
+        if (isPlaceholderTitle(saved)) {
+          try {
+            const fresh = await refreshTrackMetadata(saved.id)
+            setTracks((prev) => prev.map((item) => (item.id === fresh.id ? fresh : item)))
+          } catch {
+            // Biarkan judul cadangan; tombol segarkan tetap tersedia.
+          }
+        }
       }
       notify(`Tersimpan di pustaka: "${saved.title}".`)
     } catch (error: any) {
@@ -324,6 +340,34 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
     notify('Lagu dihapus dari pustaka.')
   }
 
+  // Buka video di youtube.com lewat peramban sistem. Ini jalan keluar yang
+  // selalu jalan ketika pemilik video menonaktifkan penyematan (galat 101/150).
+  async function openTrackExternal(track: Track) {
+    const url = track.youtubeId
+      ? `https://www.youtube.com/watch?v=${track.youtubeId}`
+      : track.title
+    if (!url) return
+    try {
+      await openOnYouTube(url)
+    } catch (error: any) {
+      notify(error?.message || 'YouTube tidak dapat dibuka di peramban.', true)
+      // Cadangan terakhir: biar peramban aplikasi yang membuka tautannya.
+      window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
+  // Ambil ulang judul/penyewa/sampul dari YouTube untuk lagu yang judulnya
+  // masih berupa cadangan "YouTube <id>".
+  async function refreshMeta(track: Track) {
+    try {
+      const fresh = await refreshTrackMetadata(track.id)
+      setTracks((prev) => prev.map((item) => (item.id === fresh.id ? fresh : item)))
+      notify(`Judul diperbarui: "${fresh.title}".`)
+    } catch (error: any) {
+      notify(error?.message || 'Judul video tidak dapat diperbarui dari YouTube.', true)
+    }
+  }
+
   const labelStyle = useMemo(
     () => (current?.thumbnail ? { backgroundImage: `url("${current.thumbnail}")` } : undefined),
     [current?.thumbnail]
@@ -394,6 +438,16 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
               {!isLocal && yt.error && <em className="music-error">{yt.error}</em>}
               {blockedHint && !(yt.error && !isLocal) && (
                 <em className="music-error">Belum terdengar suaranya — klik piringan atau tombol putar untuk memulai.</em>
+              )}
+              {!isLocal && current?.youtubeId && (
+                <button
+                  type="button"
+                  className={`music-open-yt${yt.error ? ' is-error' : ''}`}
+                  onClick={() => void openTrackExternal(current)}
+                  title="Putar lagu ini di youtube.com lewat peramban sistem"
+                >
+                  <ExternalLink size={11} /> Buka di YouTube
+                </button>
               )}
             </div>
 
@@ -495,6 +549,28 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
                     </span>
                   </button>
                   <span className="music-row-actions">
+                    {track.kind === 'YOUTUBE' && (
+                      <>
+                        {isPlaceholderTitle(track) && (
+                          <button
+                            className="icon-button"
+                            onClick={() => void refreshMeta(track)}
+                            title="Perbarui judul dari YouTube"
+                            aria-label="Perbarui judul lagu ini dari YouTube"
+                          >
+                            <RefreshCw size={13} />
+                          </button>
+                        )}
+                        <button
+                          className="icon-button"
+                          onClick={() => void openTrackExternal(track)}
+                          title="Buka di YouTube"
+                          aria-label="Buka lagu ini di YouTube"
+                        >
+                          <ExternalLink size={13} />
+                        </button>
+                      </>
+                    )}
                     <button className="icon-button" onClick={() => void removeSaved(track)} title="Hapus dari pustaka" aria-label="Hapus lagu">
                       <Trash2 size={13} />
                     </button>

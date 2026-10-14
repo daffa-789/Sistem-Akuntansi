@@ -82,8 +82,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/music", get(music::list_tracks))
         .route("/music/youtube", post(music::post_youtube_track))
         .route("/music/local", post(music::post_local_track))
+        .route("/music/open-external", post(music::open_external))
         .route("/music/order", put(music::put_track_order))
         .route("/music/{id}/media", get(music::stream_track))
+        .route("/music/{id}/refresh", post(music::refresh_track_metadata))
         .route("/music/{id}", delete(music::delete_track));
 
     Router::new()

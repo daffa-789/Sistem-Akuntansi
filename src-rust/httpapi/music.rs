@@ -182,8 +182,7 @@ async fn fetch_youtube_oembed(video_id: &str) -> Option<(String, String, String)
         video_id
     );
 
-    // Simple fetch with timeout
-    let client = reqwest_lite(&url).await.ok()?;
+    let client = http_get(&url).await.ok()?;
     let val: Value = serde_json::from_str(&client).ok()?;
     let title = val["title"].as_str()?.to_string();
     let artist = val["author_name"].as_str().unwrap_or("YouTube").to_string();
@@ -195,44 +194,112 @@ async fn fetch_youtube_oembed(video_id: &str) -> Option<(String, String, String)
     Some((title, artist, thumb))
 }
 
-async fn reqwest_lite(url: &str) -> Result<String, String> {
-    tokio::task::spawn_blocking({
-        let u = url.to_string();
-        move || {
-            let resp = ureq::get(&u).timeout(std::time::Duration::from_secs(4)).call();
-            match resp {
-                Ok(r) => r.into_string().map_err(|e| e.to_string()),
-                Err(e) => Err(e.to_string()),
-            }
-        }
+// http_get: satu permintaan GET sederhana dengan batas waktu. Dijalankan di
+// thread terpisah karena ureq memblokir; kegagalan jaringan hanya berarti
+// metadata judul belum tersedia (bukan galat bagi pengguna).
+async fn http_get(url: &str) -> Result<String, String> {
+    let u = url.to_string();
+    tokio::task::spawn_blocking(move || {
+        let config = ureq::Agent::config_builder()
+            .timeout_connect(Some(std::time::Duration::from_secs(5)))
+            .timeout_send_request(Some(std::time::Duration::from_secs(6)))
+            .timeout_recv_response(Some(std::time::Duration::from_secs(6)))
+            .build();
+        let agent = ureq::Agent::new_with_config(config);
+        let mut body = agent
+            .get(&u)
+            .call()
+            .map_err(|e| e.to_string())?
+            .into_body();
+        body.read_to_string().map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-// Since ureq might not be in Cargo.toml yet, let's use a standard hyper/tokio TCP or std HTTP fallback:
-// Actually, let's write a simple HTTP GET with tokio::net::TcpStream or check if ureq is present.
-// Wait! Let's check: if network fails or lookup fails, it simply falls back to defaults without error!
-mod ureq {
-    pub struct Response(String);
-    impl Response {
-        pub fn into_string(self) -> Result<String, String> {
-            Ok(self.0)
-        }
+// open_external membuka video di peramban sistem. Dipakai sebagai jalan keluar
+// sah ketika pemilik video menonaktifkan penyematan (galat 101/150): lagu
+// tetap diputar lewat pemutar resmi YouTube, tidak pernah diunduh/disalin.
+// Hanya tautan YouTube yang diterima — URL tujuan selalu dibangun ulang dari
+// ID video, jadi tidak ada kebocoran ke alamat lain.
+pub async fn open_external(Json(body): Json<Value>) -> Result<Json<Value>, AppError> {
+    let input = body["url"]
+        .as_str()
+        .or_else(|| body["youtubeId"].as_str())
+        .unwrap_or("")
+        .trim();
+
+    let video_id = extract_youtube_id(input)
+        .ok_or_else(|| AppError::bad_request("Tautan YouTube tidak dikenali."))?;
+    let watch = format!("https://www.youtube.com/watch?v={}", video_id);
+
+    match webbrowser::open(&watch) {
+        Ok(()) => Ok(Json(json!({ "ok": true, "opened": watch }))),
+        Err(_) => Ok(Json(json!({ "ok": false, "url": watch }))),
     }
-    pub struct Request(#[allow(dead_code)] String);
-    pub fn get(url: &str) -> Request {
-        Request(url.to_string())
+}
+
+// refresh_track_metadata mengambil ulang judul, penyewa, dan sampul sebuah
+// tautan YouTube dari oEmbed. Berguna untuk lagu yang tersimpan saat jaringan
+// sedang bermasalah sehingga judulnya masih berbentuk "YouTube <id>".
+pub async fn refresh_track_metadata(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<Value>, AppError> {
+    let (kind, video_id): (String, Option<String>) = {
+        let conn = state.db.lock();
+        conn.query_row(
+            "SELECT kind, youtube_id FROM music_tracks WHERE id = ?1 AND company_id = ?2",
+            params![id, state.config.company_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?
+        .ok_or_else(|| AppError::not_found("Lagu tidak ditemukan."))?
+    };
+
+    if kind != "YOUTUBE" {
+        return Err(AppError::bad_request(
+            "Lagu ini berkas lokal — judulnya diambil dari nama berkas.",
+        ));
     }
-    impl Request {
-        pub fn timeout(self, _d: std::time::Duration) -> Self {
-            self
-        }
-        pub fn call(self) -> Result<Response, String> {
-            // Safe fallback: oEmbed optional
-            Err("No external HTTP agent".to_string())
-        }
-    }
+    let video_id = video_id.unwrap_or_default();
+    let (title, artist, thumb) = fetch_youtube_oembed(&video_id)
+        .await
+        .ok_or_else(|| {
+            AppError::bad_request(
+                "Judul video tidak dapat diambil dari YouTube. Periksa koneksi internet.",
+            )
+        })?;
+
+    let thumbnail = if thumb.is_empty() {
+        format!("https://i.ytimg.com/vi/{}/hqdefault.jpg", video_id)
+    } else {
+        thumb
+    };
+
+    let track = {
+        let conn = state.db.lock();
+        conn.execute(
+            "UPDATE music_tracks SET title = ?1, artist = ?2, thumbnail_url = ?3 WHERE id = ?4 AND company_id = ?5",
+            params![title, artist, thumbnail, id, state.config.company_id],
+        )?;
+        let added_at: String = conn.query_row(
+            "SELECT created_at FROM music_tracks WHERE id = ?1",
+            params![id],
+            |r| r.get(0),
+        )?;
+        json!({
+            "id": id,
+            "kind": "YOUTUBE",
+            "title": title,
+            "artist": artist,
+            "youtubeId": video_id,
+            "thumbnail": thumbnail,
+            "addedAt": added_at,
+        })
+    };
+
+    Ok(Json(json!({ "track": track })))
 }
 
 pub async fn post_local_track(

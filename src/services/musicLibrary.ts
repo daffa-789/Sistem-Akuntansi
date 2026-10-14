@@ -74,6 +74,22 @@ export async function removeTrack(id: number): Promise<void> {
   await request(`/music/${id}`, { method: 'DELETE' })
 }
 
+// openOnYouTube membuka video di peramban sistem lewat backend. Dipakai saat
+// pemilik video menonaktifkan penyematan: lagu tetap diputar lewat pemutar
+// resmi YouTube, tidak pernah diunduh atau disalin ke disk.
+export async function openOnYouTube(url: string): Promise<void> {
+  await request('/music/open-external', { method: 'POST', body: { url } })
+}
+
+// refreshTrackMetadata mengambil ulang judul/penyewa/sampul sebuah tautan
+// YouTube (oEmbed) untuk lagu yang tersimpan sebelum jaringan tersedia.
+export async function refreshTrackMetadata(id: number): Promise<Track> {
+  const payload = await request<TrackResponse>(`/music/${id}/refresh`, {
+    method: 'POST'
+  })
+  return payload.track
+}
+
 // saveTrackOrder menyimpan urutan pustaka setelah pengguna menata ulang.
 export async function saveTrackOrder(tracks: Track[]): Promise<void> {
   await request('/music/order', {

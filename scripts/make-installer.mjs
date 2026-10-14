@@ -29,20 +29,23 @@ if (process.platform !== 'win32') {
 }
 
 // NSIS biasanya tidak ada di PATH; cek lokasi pemasangan standarnya.
+// Kandidan disaring dulu lewat berkas (fs) supaya pesan "tidak ditemukan"
+// hanya muncul kalau makensis benar-benar tidak terpasang — bukan karena
+// probe spawn gagal karena alasan lain.
 const candidates = [
   process.env.MAKENSIS,
   'makensis',
   'C:\\Program Files (x86)\\NSIS\\makensis.exe',
   'C:\\Program Files\\NSIS\\makensis.exe'
-].filter(Boolean)
+].filter(Boolean).filter(c => c === 'makensis' || c === process.env.MAKENSIS || fs.existsSync(c))
 
-// Spawn makensis lewat shell dengan jalur berkutip: spasi pada "Program Files
-// (x86)" tidak boleh dipecah menjadi argumen terpisah.
-//
-// Opsi memakai satu tanda hubung (mis. -VERSION), bukan garis miring: Git Bash di
-// Windows menerjemahkan argumen bergaris miring yang mirip jalur menjadi
-// "C:/Program Files/Git/VERSION" sehingga makensis membacanya sebagai berkas skrip.
+// Baca versi NSIS. Dicoba dua cara: langsung (tanpa cmd.exe) lebih dahulu —
+// spawn shell lewat cmd.exe kadang gagal dengan EBUSY (mis. di lingkungan
+// terbatas) walau makensis sendiri normal. Kalau masih gagal, baru jatuh ke
+// cara lama lewat shell dengan jalur berkutip.
 function runMakensis(args, stdio = 'inherit', bin = makensis) {
+  const direct = spawnSync(bin, args, { stdio, windowsHide: true })
+  if (!direct.error && direct.status !== null) return direct
   return spawnSync(`"${bin}" ${args.join(' ')}`, {
     stdio,
     windowsHide: true,
