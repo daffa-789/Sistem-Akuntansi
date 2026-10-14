@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod config;
 mod db;
 mod desktop;
@@ -15,6 +17,13 @@ use std::path::PathBuf;
 use std::process;
 
 fn main() {
+    #[cfg(windows)]
+    unsafe {
+        windows_sys::Win32::System::Console::AttachConsole(
+            windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS,
+        );
+    }
+
     let args: Vec<String> = env::args().skip(1).collect();
     if let Err(err) = run(args) {
         eprintln!("Finova: {}", err);

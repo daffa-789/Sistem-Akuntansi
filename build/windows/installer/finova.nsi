@@ -131,11 +131,11 @@ Section "Uninstall"
 
   ; Tanya dulu sebelum menghapus data; saat dipasang/dilepas senyap, data selalu disimpan.
   ${IfNot} ${Silent}
-    MessageBox MB_YESNO|MB_ICONQUESTION "Hapus juga data pembukuan di$\r$\n$APPDATA\Finova?$\r$\n$\r$\nPilih Tidak bila Anda ingin menyimpan jurnal dan bagan akun." IDYES deleteData
+    MessageBox MB_YESNO|MB_ICONQUESTION "Hapus juga data pembukuan di$\r$\n$LOCALAPPDATA\Finova?$\r$\n$\r$\nPilih Tidak bila Anda ingin menyimpan jurnal dan bagan akun." IDYES deleteData
   ${EndIf}
   Goto keepData
   deleteData:
-    RMDir /r "$APPDATA\Finova"
+    RMDir /r "$LOCALAPPDATA\Finova"
   keepData:
     DetailPrint "Selesai."
 SectionEnd

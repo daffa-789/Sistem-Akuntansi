@@ -69,7 +69,7 @@ if (!skipClient) {
   run(process.execPath, [path.join('node_modules', 'vite', 'bin', 'vite.js'), 'build'])
   run(process.execPath, ['scripts/keep-dist.mjs'])
 }
-run(process.execPath, ['scripts/build-go.mjs'])
+run(process.execPath, ['scripts/build-rust.mjs'])
 
 const exe = path.join('bin', 'finova.exe')
 if (!fs.existsSync(exe)) fail(`Biner ${exe} tidak ditemukan.`)
