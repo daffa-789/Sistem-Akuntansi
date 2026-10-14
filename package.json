@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "productName": "Finova",
-  "description": "Sistem Akuntansi Web Terpadu Indonesia — backend Go (net/http + SQLite) dengan frontend React + Vite",
+  "description": "Sistem Akuntansi Web Terpadu Indonesia — backend Rust Native (Axum + SQLite) dengan frontend React + Vite",
   "author": "Finova",
   "type": "module",
   "scripts": {

@@ -86,7 +86,7 @@ fn resolve_database_file(explicit: Option<&str>) -> PathBuf {
     }
 
     let local = Path::new("database").join(FALLBACK_DATABASE_NAME);
-    if Path::new("Cargo.toml").exists() || Path::new("go.mod").exists() {
+    if Path::new("Cargo.toml").exists() {
         return local;
     }
 

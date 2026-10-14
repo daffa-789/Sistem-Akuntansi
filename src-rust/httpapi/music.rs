@@ -414,9 +414,10 @@ pub async fn delete_track(
             .query_row(
                 "SELECT file_name FROM music_tracks WHERE id = ?1 AND company_id = ?2",
                 params![id, state.config.company_id],
-                |r| r.get(0),
+                |r| r.get::<_, Option<String>>(0),
             )
-            .optional()?;
+            .optional()?
+            .flatten();
 
         let aff = conn.execute(
             "DELETE FROM music_tracks WHERE id = ?1 AND company_id = ?2",

@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-pub const SCHEMA_SQL: &str = include_str!("../../internal/db/schema/schema.sqlite.sql");
+pub const SCHEMA_SQL: &str = include_str!("schema.sqlite.sql");
 pub const LOGIN_DISABLED_HASH: &str = "!!login-dinonaktifkan!!";
 
 #[derive(Clone)]
@@ -101,49 +101,6 @@ impl Db {
                  VALUES (?1, ?2, ?3, ?4)",
                 params![company_id, name, start, end],
             )?;
-        }
-
-        // Pastikan lagu awal (focus / study tracks) bila belum ada lagu sama sekali
-        let track_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM music_tracks WHERE company_id = ?1",
-                params![company_id],
-                |r| r.get(0),
-            )
-            .unwrap_or(0);
-
-        if track_count == 0 {
-            let default_tracks = [
-                (
-                    "Lofi Hip Hop Radio - Beats to Relax/Study to",
-                    "Lofi Girl",
-                    "jfKfPfyJRdk",
-                    "https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg",
-                    1,
-                ),
-                (
-                    "Coffee Shop Ambience & Chill Jazz",
-                    "Finova Focus",
-                    "e3L1I4itDms",
-                    "https://i.ytimg.com/vi/e3L1I4itDms/hqdefault.jpg",
-                    2,
-                ),
-                (
-                    "Synthwave Radio - Chill Synth / Retro Beats",
-                    "Lofi Girl",
-                    "4xDzrJKXOOY",
-                    "https://i.ytimg.com/vi/4xDzrJKXOOY/hqdefault.jpg",
-                    3,
-                ),
-            ];
-
-            for (title, artist, yt_id, thumb, pos) in default_tracks {
-                let _ = conn.execute(
-                    "INSERT OR IGNORE INTO music_tracks (company_id, kind, title, artist, youtube_id, thumbnail_url, position)
-                     VALUES (?1, 'YOUTUBE', ?2, ?3, ?4, ?5, ?6)",
-                    params![company_id, title, artist, yt_id, thumb, pos],
-                );
-            }
         }
 
         Ok(())
