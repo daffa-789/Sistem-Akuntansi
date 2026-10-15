@@ -1,0 +1,214 @@
+import React, { useState } from 'react'
+import { Download, Printer, RefreshCw } from 'lucide-react'
+import { Button } from '../ui/Button.jsx'
+import { PrintHeader, PrintSignatures } from '../ui/PrintFrame.jsx'
+import { PageLoading } from '../ui/PageLoading.jsx'
+import { ErrorNotice } from '../ui/ErrorNotice.jsx'
+import { useLoad } from '../../hooks/useLoad.js'
+import { request } from '../../api.js'
+import { apiPath, dateLabel, firstDay, money, today, GL } from '../../utils/formatters.js'
+import { exportLedgerFile } from '../../services/downloads.js'
+
+export function LedgerView({ accounts = [], company, notify }) {
+  const [range, setRange] = useState({ from: firstDay(), to: today() })
+  const [selectedAccountId, setSelectedAccountId] = useState(() =>
+    accounts[0]?.id ? String(accounts[0].id) : ''
+  )
+  const [exporting, setExporting] = useState(false)
+
+  const currentAccount = accounts.find((a) => String(a.id) === String(selectedAccountId))
+
+  const { data, loading, error, reload } = useLoad(() => {
+    if (!selectedAccountId) return null
+    return request(apiPath('/reports/ledger', { accountId: selectedAccountId, ...range }))
+  }, [selectedAccountId, range.from, range.to])
+
+  const ledgerData = data?.data
+
+  async function handleExportExcel() {
+    if (!currentAccount || !ledgerData) return
+    setExporting(true)
+    try {
+      await exportLedgerFile(range, selectedAccountId, currentAccount.code)
+      notify(`Buku Besar ${currentAccount.code} berhasil diekspor ke Excel (.xlsx).`)
+    } catch (err) {
+      notify(`Gagal ekspor Excel: ${err.message}`, true)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  return (
+    <>
+      <PrintHeader title={'Buku Besar' + (currentAccount ? ' — ' + currentAccount.code + ' ' + currentAccount.name : '')} company={company} range={range} />
+      <div className="toolbar no-print">
+        <div>
+          <h1 className="page-title">Buku Besar (General Ledger)</h1>
+          <p className="page-copy">
+            Mutasi debit/kredit per akun dengan perhitungan saldo berjalan otomatis (4-kolom).
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button variant="secondary" small onClick={() => window.print()}>
+            <Printer size={15} /> Cetak Buku Besar
+          </Button>
+          <Button
+            variant="secondary"
+            small
+            disabled={exporting || !ledgerData}
+            onClick={handleExportExcel}
+          >
+            <Download size={15} /> {exporting ? 'Mengekspor…' : 'Ekspor Excel'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="panel no-print" style={{ marginBottom: 20 }}>
+        <div className="filter-row">
+          <div className="field" style={{ minWidth: 260 }}>
+            <label htmlFor="ledger-account">PILIH AKUN BUKU BESAR</label>
+            <select
+              id="ledger-account"
+              className="select"
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.code} — {a.name} ({a.normal_balance === 'DEBIT' ? 'D' : 'K'})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="ledger-from">DARI TANGGAL</label>
+            <input
+              id="ledger-from"
+              className="input"
+              type="date"
+              value={range.from}
+              onChange={(e) => setRange({ ...range, from: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="ledger-to">SAMPAI TANGGAL</label>
+            <input
+              id="ledger-to"
+              className="input"
+              type="date"
+              value={range.to}
+              onChange={(e) => setRange({ ...range, to: e.target.value })}
+            />
+          </div>
+          <Button variant="secondary" small onClick={reload} aria-label="Muat ulang data buku besar">
+            <RefreshCw size={14} aria-hidden="true" /> Muat Ulang
+          </Button>
+        </div>
+      </div>
+
+      <ErrorNotice error={error} />
+
+      {currentAccount && (
+        <div className="kpi-grid">
+          <div className="stat-card kpi">
+            <div className="kpi-label">Kode &amp; Nama Akun</div>
+            <div className="kpi-value sm">
+              {currentAccount.code} — {currentAccount.name}
+            </div>
+          </div>
+          <div className="stat-card kpi">
+            <div className="kpi-label">Kelompok &amp; Saldo Normal</div>
+            <div className="kpi-value sm">
+              {GL[currentAccount.account_group] || currentAccount.account_group} (
+              {currentAccount.normal_balance})
+            </div>
+          </div>
+          <div className="stat-card kpi">
+            <div className="kpi-label">Saldo Awal Periode</div>
+            <div className="kpi-value sm">{ledgerData ? money(ledgerData.opening) : '-'}</div>
+          </div>
+          <div className="stat-card kpi accent-debit">
+            <div className="kpi-label">Saldo Akhir Periode</div>
+            <div className="kpi-value">{ledgerData ? money(ledgerData.closing) : '-'}</div>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <PageLoading message="Menghitung saldo buku besar…" />
+      ) : (
+        <section className="panel panel-tight" aria-label="Tabel Buku Besar">
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col" style={{ width: '14%' }}>
+                    Tanggal
+                  </th>
+                  <th scope="col" style={{ width: '16%' }}>
+                    No. Bukti / Ref
+                  </th>
+                  <th scope="col" style={{ width: '38%' }}>
+                    Keterangan Transaksi
+                  </th>
+                  <th scope="col" style={{ width: '16%', textAlign: 'right' }}>
+                    Debit (Rp)
+                  </th>
+                  <th scope="col" style={{ width: '16%', textAlign: 'right' }}>
+                    Kredit (Rp)
+                  </th>
+                  <th scope="col" style={{ width: '18%', textAlign: 'right' }}>
+                    Saldo Berjalan (Rp)
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="row-opening">
+                  <td>{dateLabel(range.from)}</td>
+                  <td>-</td>
+                  <td>Saldo Awal Periode</td>
+                  <td className="number">-</td>
+                  <td className="number">-</td>
+                  <td className="number">
+                    <strong>{ledgerData ? money(ledgerData.opening) : money(0)}</strong>
+                  </td>
+                </tr>
+                {ledgerData?.rows?.map((r, i) => (
+                  <tr key={i}>
+                    <td>{dateLabel(r.entry_date)}</td>
+                    <td>
+                      <strong>{r.voucher_no}</strong>
+                    </td>
+                    <td>{r.memo || r.description}</td>
+                    <td className="number">{r.debit > 0 ? money(r.debit) : '-'}</td>
+                    <td className="number">{r.credit > 0 ? money(r.credit) : '-'}</td>
+                    <td className="number" style={{ fontWeight: 700 }}>
+                      {money(r.balance)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="accounting-double-line">
+                  <td colSpan={5} style={{ padding: '12px 14px' }}>
+                    <strong>SALDO AKHIR BUKU BESAR PER {dateLabel(range.to)}</strong>
+                  </td>
+                  <td className="number" style={{ fontSize: 14 }}>
+                    {ledgerData ? money(ledgerData.closing) : money(0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+            {!ledgerData?.rows?.length && (
+              <div className="muted" style={{ padding: '24px 16px', textAlign: 'center' }}>
+                Tidak ada transaksi mutasi pada akun ini selama periode {dateLabel(range.from)} s.d.{' '}
+                {dateLabel(range.to)}.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+      <PrintSignatures />
+    </>
+  )
+}

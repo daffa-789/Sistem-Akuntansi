@@ -99,6 +99,13 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
   }, [playToken, isLocal, yt.playing, yt.error])
 
   useEffect(() => {
+    if (yt.error && !isLocal) {
+      notify(yt.error, true)
+      setPanelOpen(true)
+    }
+  }, [yt.error, isLocal, notify])
+
+  useEffect(() => {
     localStorage.setItem(VOLUME_KEY, String(volume))
     if (audioRef.current) audioRef.current.volume = (muted ? 0 : volume) / 100
     yt.setVolume(muted ? 0 : volume)
@@ -188,12 +195,18 @@ export function MusicPlayer({ notify }: { notify: (message: string, isError?: bo
       }
       return
     }
-    if (yt.playing) yt.pause()
-    else {
+    if (yt.playing) {
+      yt.pause()
+    } else {
+      if (yt.error && current?.youtubeId) {
+        void openTrackExternal(current)
+        notify('Pemilik video menonaktifkan penyematan. Membuka di YouTube...')
+        return
+      }
       setPlayToken((value) => value + 1)
       yt.play()
     }
-  }, [current, tracks.length, playTrack, isLocal, yt])
+  }, [current, tracks.length, playTrack, isLocal, yt, notify])
 
   const seek = useCallback((seconds: number) => {
     if (isLocal) {

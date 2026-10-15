@@ -37,7 +37,7 @@ $desktopLnk.TargetPath = "$installDir\finova.exe"
 $desktopLnk.Arguments = "-app"
 $desktopLnk.WorkingDirectory = $installDir
 $desktopLnk.IconLocation = "$installDir\icon.ico,0"
-$desktopLnk.Description = "Finova — Sistem Akuntansi & Pembukuan Native"
+$desktopLnk.Description = "Finova - Sistem Akuntansi dan Pembukuan Native"
 $desktopLnk.Save()
 Write-Host "[OK] Pintasan Desktop dibuat: $desktopLnkPath" -ForegroundColor Green
 
@@ -52,7 +52,7 @@ $startMenuLnk.TargetPath = "$installDir\finova.exe"
 $startMenuLnk.Arguments = "-app"
 $startMenuLnk.WorkingDirectory = $installDir
 $startMenuLnk.IconLocation = "$installDir\icon.ico,0"
-$startMenuLnk.Description = "Finova — Sistem Akuntansi & Pembukuan Native"
+$startMenuLnk.Description = "Finova - Sistem Akuntansi dan Pembukuan Native"
 $startMenuLnk.Save()
 Write-Host "[OK] Pintasan Start Menu dibuat: $startMenuLnkPath" -ForegroundColor Green
 
@@ -61,7 +61,7 @@ $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Finova"
 if (-not (Test-Path $regPath)) {
     New-Item -Path $regPath -Force | Out-Null
 }
-Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "Finova — Sistem Akuntansi"
+Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "Finova - Sistem Akuntansi"
 Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "1.0.0"
 Set-ItemProperty -Path $regPath -Name "Publisher" -Value "Finova"
 Set-ItemProperty -Path $regPath -Name "DisplayIcon" -Value "$installDir\icon.ico"

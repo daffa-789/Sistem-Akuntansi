@@ -87,10 +87,10 @@ fs.mkdirSync(path.join('build', 'bin'), { recursive: true })
 
 // makensis dipanggil dengan define agar versi hanya perlu ditulis satu kali.
 const args = [
-  `-DAppVersion="${version}"`,
-  `-DSrcExe="${srcExe}"`,
-  `-DIconFile="${srcIcon}"`,
-  `"${script}"`
+  `-DAppVersion=${version}`,
+  `-DSrcExe=${srcExe}`,
+  `-DIconFile=${srcIcon}`,
+  path.resolve(script)
 ]
 const result = runMakensis(args)
 if (result.status !== 0) fail('Pembuatan installer gagal.')
