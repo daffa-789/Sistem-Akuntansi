@@ -1,15 +1,15 @@
 import React, { useState } from 'react'
 import {
-  BookOpen, FileBarChart, Landmark, LayoutDashboard,
-  ReceiptText
+  BookOpenCheck, CircleDollarSign, FileBarChart, PackageCheck,
+  ShoppingCart, Users
 } from 'lucide-react'
 
 export const NAV_ITEMS = [
-  ['dashboard', 'Dashboard', LayoutDashboard],
-  ['journals', 'Jurnal Umum', BookOpen],
-  ['ledger', 'Buku Besar', ReceiptText],
-  ['trial-balance', 'Neraca Saldo', FileBarChart],
-  ['accounts', 'Bagan Akun (CoA)', Landmark]
+  ['revenue', 'Pendapatan', CircleDollarSign],
+  ['expenditure', 'Pengeluaran', ShoppingCart],
+  ['production', 'Produksi', PackageCheck],
+  ['payroll', 'Penggajian / SDM', Users],
+  ['reporting', 'Buku Besar & Pelaporan', BookOpenCheck]
 ]
 
 export function AppShell({
@@ -44,12 +44,13 @@ export function AppShell({
     <div className="app-shell">
       <aside className="sidebar" aria-label="Menu Aplikasi">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true" style={{ background: 'transparent', boxShadow: 'none' }}>
-            <img src="/favicon.png" alt="Finova Logo" style={{ width: 34, height: 34, borderRadius: 9, boxShadow: '0 4px 12px rgba(6, 182, 212, 0.35)' }} />
+          <span className="brand-mark" aria-hidden="true">
+            <img src="/favicon.png" alt="" />
           </span>
-          Finova
+          <span className="brand-copy"><strong>Finova</strong><small>Sistem akuntansi</small></span>
         </div>
         <div className="company-label">{company?.name || 'PT Finova Akuntansi Indonesia'}</div>
+        <div className="nav-section-label">SIKLUS UTAMA SIA</div>
         <nav className="nav-list" aria-label="Navigasi Utama">
           {NAV_ITEMS.map(([k, label, Icon]) => (
             <button
@@ -64,75 +65,40 @@ export function AppShell({
             </button>
           ))}
         </nav>
-        <div className="sidebar-bottom" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.15)', marginTop: 20, paddingTop: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#a7f3d0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-            Pengesahan Dokumen
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+        <details className="sidebar-bottom sidebar-signers">
+          <summary>Penandatangan laporan</summary>
+          <div className="sidebar-signers-fields">
             <div>
-              <label style={{ display: 'block', color: '#bbf7d0', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
-                DIBUAT OLEH:
-              </label>
+              <label>Dibuat oleh</label>
               <input
                 type="text"
                 value={signers.maker}
                 onChange={(e) => updateSigner('maker', e.target.value)}
                 placeholder="Staf Keuangan"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0, 0, 0, 0.25)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: 4,
-                  padding: '4px 8px',
-                  color: '#ffffff',
-                  fontSize: 11
-                }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#bbf7d0', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
-                DIPERIKSA OLEH:
-              </label>
+              <label>Diperiksa oleh</label>
               <input
                 type="text"
                 value={signers.checker}
                 onChange={(e) => updateSigner('checker', e.target.value)}
                 placeholder="Auditor / Penguji"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0, 0, 0, 0.25)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: 4,
-                  padding: '4px 8px',
-                  color: '#ffffff',
-                  fontSize: 11
-                }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#bbf7d0', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
-                DISETUJUI OLEH:
-              </label>
+              <label>Disetujui oleh</label>
               <input
                 type="text"
                 value={signers.approver}
                 onChange={(e) => updateSigner('approver', e.target.value)}
                 placeholder="Pimpinan / Direktur"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0, 0, 0, 0.25)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: 4,
-                  padding: '4px 8px',
-                  color: '#ffffff',
-                  fontSize: 11
-                }}
               />
             </div>
           </div>
-        </div>
+        </details>
       </aside>
 
       <main className="main">

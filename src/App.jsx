@@ -1,10 +1,10 @@
 import React, { useCallback, useState } from 'react'
 import { AppShell } from './components/layout/AppShell.jsx'
-import { DashboardView } from './components/views/DashboardView.jsx'
-import { JournalsView, defaultRegisterFilters } from './components/views/JournalsView.jsx'
-import { LedgerView } from './components/views/LedgerView.jsx'
-import { TrialBalanceView } from './components/views/TrialBalanceView.jsx'
-import { AccountsView } from './components/views/AccountsView.jsx'
+import { RevenueCycleView } from './components/views/RevenueCycleView.jsx'
+import { ExpenditureCycleView } from './components/views/ExpenditureCycleView.jsx'
+import { ProductionCycleView } from './components/views/ProductionCycleView.jsx'
+import { PayrollCycleView } from './components/views/PayrollCycleView.jsx'
+import { ReportingCycleView } from './components/views/ReportingCycleView.jsx'
 import { MusicPlayer } from './components/widgets/MusicPlayer.jsx'
 import { PageLoading } from './components/ui/PageLoading.jsx'
 import { ErrorNotice } from './components/ui/ErrorNotice.jsx'
@@ -12,10 +12,8 @@ import { useLoad } from './hooks/useLoad.js'
 import { request } from './api.js'
 
 function Workspace() {
-  const [route, setRoute] = useState('journals')
+  const [route, setRoute] = useState('revenue')
   const [toast, setToast] = useState(null)
-  // Filter register dijaga di sini agar berpindah layar tidak menghapus hasil kerja.
-  const [registerFilters, setRegisterFilters] = useState(() => defaultRegisterFilters())
 
   const companyState = useLoad(() => request('/company'), [])
   const accountsState = useLoad(() => request('/accounts'), [])
@@ -34,40 +32,23 @@ function Workspace() {
 
   let pageContent = null
   switch (route) {
-    case 'dashboard':
-      pageContent = <DashboardView />
+    case 'revenue':
+      pageContent = <RevenueCycleView notify={notify} />
       break
-    case 'journals':
-    case 'journal-report':
-      pageContent = (
-        <JournalsView
-          accounts={accounts}
-          company={company}
-          notify={notify}
-          filters={registerFilters}
-          onFilters={setRegisterFilters}
-        />
-      )
+    case 'expenditure':
+      pageContent = <ExpenditureCycleView notify={notify} />
       break
-    case 'ledger':
-      pageContent = <LedgerView accounts={accounts} company={company} notify={notify} />
+    case 'production':
+      pageContent = <ProductionCycleView notify={notify} />
       break
-    case 'trial-balance':
-      pageContent = <TrialBalanceView company={company} notify={notify} />
+    case 'payroll':
+      pageContent = <PayrollCycleView notify={notify} />
       break
-    case 'accounts':
-      pageContent = <AccountsView accounts={accounts} company={company} notify={notify} />
+    case 'reporting':
+      pageContent = <ReportingCycleView accounts={accounts} company={company} notify={notify} />
       break
     default:
-      pageContent = (
-        <JournalsView
-          accounts={accounts}
-          company={company}
-          notify={notify}
-          filters={registerFilters}
-          onFilters={setRegisterFilters}
-        />
-      )
+      pageContent = <RevenueCycleView notify={notify} />
   }
 
   return (
