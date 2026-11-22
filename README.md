@@ -1,151 +1,102 @@
-# 🧮 Finova — Sistem Akuntansi
+# Finova — Sistem Akuntansi Web Terpadu Indonesia
 
-**Sistem Akuntansi Web Terpadu Indonesia** — aplikasi desktop native dengan backend **Rust (Axum + SQLite)** dan frontend **React 18 + Vite + TypeScript** yang tertanam (embedded) langsung di dalam biner.
+Finova adalah aplikasi akuntansi **web** dengan backend **Bun** (`bun:sqlite`, HTTP bawaan) dan frontend **React 18 + Vite + TypeScript**. Antarmuka dibuka di peramban; tidak ada shell desktop, ikon tray, atau installer Windows.
 
-![Rust](https://img.shields.io/badge/Rust-2021-dca338?logo=rust&logoColor=white)
-![Axum](https://img.shields.io/badge/Axum-0.8-orange)
-![React](https://img.shields.io/badge/React-18.3-61dafb?logo=react&logoColor=black)
-![Vite](https://img.shields.io/badge/Vite-6-646cff?logo=vite&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178c6?logo=typescript&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38bdf8?logo=tailwindcss&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-003b57?logo=sqlite&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-Windows%20native-0078d6?logo=windows&logoColor=white)
+## Fitur
 
-## ✨ Fitur
+- Bagan akun, periode akuntansi, dan penutupan periode.
+- Jurnal umum: buat, edit, posting, flag, reverse, dan nomor voucher otomatis.
+- Template jurnal serta impor data dari Excel.
+- Audit trail per jurnal.
+- Laporan: buku besar, neraca saldo, jurnal, laba rugi, neraca, arus kas, dan perubahan ekuitas.
+- Ekspor XLSX dan PDF tanpa dependensi berat tambahan.
+- Server hanya bind ke `127.0.0.1` dengan port acak, kecuali `PORT` ditentukan.
 
-- 📊 **Bagan Akun (Chart of Accounts)** — akun dengan kode, grup, saldo normal, dan kategori arus kas.
-- 🗓️ **Periode Akuntansi** — pembuatan periode dan penutupan periode (close period).
-- 📒 **Jurnal Umum** — buat, edit, posting, flag, dan **reverse jurnal**; nomor voucher dibuat otomatis.
-- 🧾 **Template Jurnal** — simpan template jurnal berulang dan impor template dari Excel.
-- 🔍 **Audit Trail** — riwayat audit per jurnal (siapa mengubah apa, kapan).
-- 📈 **Laporan** — neraca saldo (trial balance), buku besar, laporan jurnal, dan laporan keuangan.
-- 📤 **Ekspor & Impor** — ekspor **XLSX** (native, via `rust_xlsxwriter`) dan **PDF** (via `printpdf`); impor data dari Excel (`calamine`).
-- 🖥️ **Desktop Native Windows** — jendela aplikasi via `tao` + `wry`, frontend tertanam di biner (`rust-embed`), plus skrip pembuat installer.
-- 🔒 **Aman secara default** — server hanya bind ke `127.0.0.1`, port dipilih dinamis oleh OS agar tidak bentrok dengan aplikasi lain.
-- 🧪 **Teruji** — unit test Rust (`cargo test`) dan test UI (`vitest`).
-
-## 🏗️ Arsitektur
+## Arsitektur
 
 ```
-┌──────────────────────────────────────────────┐
-│  Finova (satu biner Windows)                 │
-│                                              │
-│  ┌────────────┐   HTTP    ┌───────────────┐  │
-│  │ React 18   │ ────────► │ Axum 0.8      │  │
-│  │ (embedded) │  :port    │ (Rust native) │  │
-│  └────────────┘           └──────┬────────┘  │
-│                                  ▼           │
-│                          ┌───────────────┐   │
-│                          │ SQLite        │   │
-│                          │ (rusqlite)    │   │
-│                          └───────────────┘   │
-└──────────────────────────────────────────────┘
+Peramban  ──HTTP──>  server Bun (server/app.ts)
+                       ├── API REST (/api/...)
+                       ├── bun:sqlite (database/finova.sqlite)
+                       └── aset SPA (internal/web/dist)
 ```
 
-Frontend React dibuild dengan Vite (TailwindCSS + Recharts + SheetJS), lalu hasil build ditanamkan ke dalam biner Rust. Saat dijalankan, Axum membuka port lokal acak di `127.0.0.1` dan menampilkan UI di jendela desktop (`wry`).
+`server/app.ts` adalah satu-satunya definisi rute, dipakai baik oleh `bun run dev` maupun `bun start`. Saat produksi, server menyajikan berkas hasil `vite build` dan fallback ke `index.html` untuk rute frontend.
 
-## 📁 Struktur Proyek
+## Prasyarat
 
-```
-Sistem-Akuntansi/
-├── src-rust/               # Backend Rust (server + domain + desktop)
-│   ├── main.rs             # Entry point
-│   ├── config.rs           # Konfigurasi (port, DB, static dir)
-│   ├── db/                 # Skema & koneksi SQLite
-│   ├── domain/             # Model akuntansi (Account, Entry, Line, ...)
-│   ├── desktop/            # Jendela native (tao + wry) & ikon
-│   ├── export/             # Ekspor XLSX & PDF
-│   └── httpapi/            # REST API Axum (accounts, journals, reports, ...)
-├── src/                    # Frontend React 18 + Vite
-│   ├── components/         # Layout, modals, views, ui, widgets
-│   ├── backend/            # Accounting engine & layanan
-│   ├── hooks/ services/ utils/
-│   └── App.jsx / App.tsx
-├── shared/                 # Tipe bersama TS ↔ Rust
-├── scripts/                # Dev/build/installer helpers (.mjs)
-├── Cargo.toml              # Manifest Rust
-├── package.json            # Manifest Node (frontend + tooling)
-└── vite.config.ts
-```
+- **Bun** 1.4 atau lebih baru (`bun --version`).
+- **Node.js** 20 atau lebih baru untuk skrip bantu `.mjs` (`node --version`).
 
-## 🚀 Quick Start
-
-### Prasyarat
-
-- **Node.js** ≥ 20 dan npm
-- **Rust** stable (toolchain terbaru)
-- **Windows** (fitur desktop native memakai Win32 API)
-
-### Menjalankan (mode pengembangan)
+## Menjalankan
 
 ```bash
-npm install
-npm run dev            # menjalankan Vite dev server + cargo run sekaligus
+bun install
+bun run dev          # server Bun + Vite dev server (HMR)
 ```
 
-Atau jalankan terpisah:
+Buka alamat `http://localhost:<port>` yang dicetak di terminal.
+
+Mode produksi (web):
 
 ```bash
-npm run dev:frontend   # Vite di port dev
-npm run dev:server     # cargo run -- -no-browser
+bun run build        # build frontend + kompilasi bin/finova.exe
+bun start            # server + buka otomatis di peramban
+bun run start -- -no-browser   # server saja
 ```
 
-### Build & Installer
+Tanpa `bin/finova.exe`, `bun start` otomatis menjalankan `server/index.ts` dari sumber dengan Bun.
+
+## Testing
 
 ```bash
-npm run build          # build frontend + build Rust (release, LTO)
-npm run installer      # membuat installer Windows
+bun run test         # 46 test server (Bun) + 28 test UI (Vitest)
+bun run test:server  # hanya server
+bun run test:ui      # hanya UI
+bun run typecheck    # TypeScript
 ```
 
-### Testing
+## Konfigurasi
 
-```bash
-npm test               # cargo test + vitest run
-npm run typecheck       # tsc --noEmit
-```
-
-## ⚙️ Konfigurasi
-
-Konfigurasi lewat file `.env` (lihat `.env.example`):
+Lewat variabel lingkungan atau berkas `.env`:
 
 | Variabel | Keterangan |
 | --- | --- |
-| `PORT` | Kosongkan agar OS memilih port bebas (disarankan). |
-| `VITE_PORT` | Port Vite dev server. |
-| `CLIENT_ORIGIN` | Hanya perlu saat dev bila frontend memanggil API lintas asal. |
-| `DATABASE_FILE` | Lokasi file SQLite (default `./database/finova.sqlite`). |
-| `OPERATOR_NAME` | Nama operator (untuk audit trail). |
+| `PORT` | Kosongkan agar sistem memilih port bebas (disarankan). |
+| `VITE_PORT` | Port Vite saat pengembangan; kosong = otomatis. |
+| `CLIENT_ORIGIN` | Diperlukan hanya bila frontend memanggil API lintas asal. |
+| `DATABASE_FILE` | Lokasi berkas SQLite (bawaan `database/finova.sqlite`). |
+| `OPERATOR_NAME` | Nama operator untuk audit trail. |
 | `COMPANY_NAME` | Nama perusahaan. |
-| `STATIC_DIR` | Folder aset frontend; kosongkan untuk memakai aset tertanam di biner. |
+| `STATIC_DIR` | Folder aset frontend; kosong = pakai `internal/web/dist`. |
 
-## 📜 Skrip NPM
+## Skrip utama
 
 | Skrip | Fungsi |
 | --- | --- |
-| `npm run dev` | Dev: Vite + Rust server |
-| `npm run build` | Build frontend + server (release) |
-| `npm run installer` | Buat installer Windows |
-| `npm run db:init` | Inisialisasi database |
-| `npm test` | Semua test (Rust + UI) |
-| `npm run typecheck` | Cek tipe TypeScript |
-| `npm run deps:audit` | Audit ukuran dependensi |
+| `bun run dev` | Server Bun + Vite untuk pengembangan. |
+| `bun run build:client` | Build frontend ke `internal/web/dist`. |
+| `bun run build:server` | Kompilasi server ke `bin/finova.exe`. |
+| `bun run build` | Keduanya. |
+| `bun start` | Jalankan aplikasi web. |
+| `bun run db:init` | Inisialisasi database lokal. |
+| `bun run db:clean` | Bersihkan transaksi, pertahankan akun dan periode. |
+| `bun run clean` | Bersihkan hasil build dan cache. |
 
-## 🔌 REST API (ringkas)
+## REST API (ringkas)
 
-Server Axum mengekspos endpoint seperti:
+- `GET /api/health` — health check.
+- `GET/PUT /api/company` — data perusahaan.
+- `GET/POST /api/accounts`, `PUT/DELETE /api/accounts/{id}` — bagan akun.
+- `GET/POST /api/periods`, `POST /api/periods/{id}/close` — periode.
+- `GET /api/journals/next-voucher`, `GET/POST /api/journals`, `PUT/DELETE /api/journals/{id}` — jurnal.
+- `POST /api/journals/{id}/post`, `POST /api/journals/{id}/reverse` — posting dan reverse.
+- `GET /api/journals/{id}/audit` — audit trail.
+- `GET/POST /api/templates`, `DELETE /api/templates/{id}` — template jurnal.
+- `POST /api/imports/template`, `/api/imports/preview`, `/api/imports/confirm` — impor Excel.
+- `/api/exports/...` — ekspor XLSX dan PDF.
+- `/api/music/...` — pemutar musik lokal/YouTube.
 
-- `GET/PUT /company` — data perusahaan
-- `GET/POST /accounts`, `PUT /accounts/{id}` — bagan akun
-- `GET/POST /periods`, `POST /periods/{id}/close` — periode
-- `GET /journals/next-voucher` — nomor voucher berikutnya
-- `POST /journals`, `PUT/DELETE /journals/{id}` — jurnal
-- `POST /journals/{id}/post` · `/reverse` — posting & reverse
-- `GET /journals/{id}/audit` — audit trail
-- `GET /templates`, `POST /templates`, `DELETE /templates/{id}` — template jurnal
-- `POST /imports/template`, `/imports/preview`, `/imports/confirm` — impor Excel
-- `/exports/...` — ekspor jurnal/buku besar/neraca saldo (XLSX & PDF)
-- `GET /health` — health check
+## Catatan
 
----
-
-Dibuat dengan ☕ dan Rust oleh **daffa-789**.
+Data disimpan lokal di SQLite; tidak memerlukan XAMPP, phpMyAdmin, atau layanan database terpisah. Aplikasi yang sudah terpasang sebagai desktop dari versi sebelumnya tidak lagi diperlukan dan bisa dihapus melalui Pengaturan > Aplikasi.

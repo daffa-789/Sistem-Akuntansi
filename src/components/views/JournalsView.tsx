@@ -356,7 +356,7 @@ export function JournalsView({ accounts = [], company, notify, filters, onFilter
     }
   }
 
-  // Berkas dibuat di server Go; parameter filter diteruskan agar isi berkas
+  // Berkas dibuat di server Bun; parameter filter diteruskan agar isi berkas
   // sama dengan yang sedang dilihat pada register.
   function exportQuery(): Query {
     return {

@@ -1,7 +1,7 @@
 // Membersihkan hasil build dan cache yang selalu bisa dibuat ulang, sehingga folder
 // proyek tetap ringan. Tidak pernah menyentuh database (folder database/ & AppData).
 //
-//   node scripts/clean.mjs            -> ringkas cache + biner + installer
+//   node scripts/clean.mjs            -> ringkas cache + biner + hasil build
 //   node scripts/clean.mjs --modules  -> juga hapus node_modules (perlu `npm install` lagi)
 import fs from 'node:fs'
 import path from 'node:path'
@@ -9,10 +9,10 @@ import path from 'node:path'
 const targets = [
   'bin',
   'build/bin',
+  'dist-server',
   'node_modules/.vite',
   'internal/web/dist/assets',
-  'coverage',
-  'dist-server'
+  'coverage'
 ]
 const alsoModules = process.argv.includes('--modules')
 if (alsoModules) targets.push('node_modules')
@@ -50,11 +50,12 @@ for (const target of targets) {
   console.log(`dihapus: ${target.padEnd(28)} ${(bytes / 1048576).toFixed(1)} MiB`)
 }
 
-// Penanda folder embed harus tetap ada supaya `go build` tidak gagal.
+// Penanda folder dist harus tetap ada agar build frontend & compile Bun tetap
+// punya folder tujuan sebelum ada aset.
 fs.mkdirSync('internal/web/dist', { recursive: true })
 const marker = path.join('internal/web/dist', '.gitkeep')
 if (!fs.existsSync(marker)) {
-  fs.writeFileSync(marker, '# Placeholder agar `go build` berhasil sebelum frontend dibangun.\n')
+  fs.writeFileSync(marker, '# Placeholder sebelum frontend dibangun.\n')
 }
 
 console.log(`\nTotal dibebaskan: ${(freed / 1048576).toFixed(1)} MiB`)

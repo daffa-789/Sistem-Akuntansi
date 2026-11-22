@@ -1,19 +1,19 @@
-// Mode pengembangan: backend Go (`go run ./cmd/finova`) + Vite dev server (HMR).
-// Ditulis sebagai JavaScript biasa supaya tidak perlu tsx/dotenv/concurrently
-// lagi di node_modules.
+// Mode pengembangan: backend Bun (`bun run server/index.ts`) + Vite dev server (HMR).
+// Ditulis sebagai JavaScript biasa supaya tetap bisa dijalankan dengan node,
+// tanpa perlu tsx/dotenv/concurrently lagi di node_modules.
 //
 // Dua aturan yang membuat skrip ini berbeda dari versi lamanya:
-//   1. Tidak ada port tetap. Go memintakan port bebas ke sistem, port nyatanya
-//      dibaca dari keluarannya lalu diteruskan ke proxy Vite (VITE_API_PORT).
+//   1. Tidak ada port tetap. Bun memintakan port bebas ke sistem, port nyatanya
+//      dibaca dari keluaran backend lalu diteruskan ke proxy Vite (VITE_API_PORT).
 //   2. Tidak ada lagi pembunuhan proses. Versi lama memanggil Stop-Process pada
 //      penghuni port 3000/5199 setiap kali `npm run dev` dijalankan — itu
 //      mematikan dev server proyek lain di mesin yang sama.
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
 const isWindows = process.platform === 'win32'
-// Variabel lingkungan asli selalu menang atas isi .env (sama seperti config.Load di Go).
+// Variabel lingkungan asli selalu menang atas isi .env (sama seperti loadConfig di server/config.ts).
 const dotenvValues = readDotenv('.env')
 const env = { ...dotenvValues, ...filteredProcessEnv() }
 const vite = path.resolve('node_modules', 'vite', 'bin', 'vite.js')
@@ -26,12 +26,19 @@ function filteredProcessEnv() {
   return out
 }
 
-if (!fs.existsSync('Cargo.toml')) {
-  console.error('Cargo.toml tidak ditemukan: jalankan dari folder proyek Finova.')
+if (!fs.existsSync('package.json')) {
+  console.error('package.json tidak ditemukan: jalankan dari folder proyek Finova.')
   process.exit(1)
 }
 if (!fs.existsSync(vite)) {
-  console.error('Vite belum terpasang: jalankan `npm install` lebih dulu.')
+  console.error('Vite belum terpasang: jalankan `bun install` lebih dulu.')
+  process.exit(1)
+}
+
+// Bun harus ada di PATH untuk menjalankan backend.
+const bunProbe = spawnSync(isWindows ? 'bun.exe' : 'bun', ['--version'], { windowsHide: true })
+if (bunProbe.error || bunProbe.status !== 0) {
+  console.error('Bun tidak ditemukan di PATH. Pasang dari https://bun.sh (cek dengan `bun --version`).')
   process.exit(1)
 }
 
@@ -51,7 +58,7 @@ function watch(child, label) {
   children.push(child)
   child.on('error', (error) => {
     console.error(`Gagal memulai ${label}: ${error.message}`)
-    console.error('Pastikan Rust terpasang: https://rustup.rs (cek dengan `cargo --version`).')
+    console.error('Pastikan Bun terpasang: https://bun.sh (cek dengan `bun --version`).')
     stop(1)
   })
   child.on('exit', (code, signal) => {
@@ -64,20 +71,21 @@ function watch(child, label) {
   })
 }
 
-console.log('[dev] backend Rust diminta berjalan lebih dulu supaya port-nya dapat dibaca Vite...')
+console.log('[dev] backend Bun diminta berjalan lebih dulu supaya port-nya dapat dibaca Vite...')
 
-const cargoBin = isWindows ? 'cargo.exe' : 'cargo'
-const rustChild = spawn(cargoBin, ['run', '--', '-no-browser'], {
+const bunBin = isWindows ? 'bun.exe' : 'bun'
+const serverEntry = path.resolve('server', 'index.ts')
+const serverChild = spawn(bunBin, ['run', serverEntry, '-no-browser'], {
   stdio: ['ignore', 'pipe', 'inherit'],
   windowsHide: true,
   env
 })
-watch(rustChild, 'backend Rust')
+watch(serverChild, 'backend Bun')
 
-// Sambil menunggu, keluaran Rust tetap ditampilkan apa adanya.
-waitForMarker(rustChild.stdout, /Finova siap di http:\/\/127\.0\.0\.1:(\d+)/, 240000)
+// Sambil menunggu, keluaran backend tetap ditampilkan apa adanya.
+waitForMarker(serverChild.stdout, /Finova siap di http:\/\/127\.0\.0\.1:(\d+)/, 240000)
   .then((apiPort) => {
-    console.log(`[dev] API Rust    -> http://127.0.0.1:${apiPort}`)
+    console.log(`[dev] API Bun    -> http://127.0.0.1:${apiPort}`)
     console.log('[dev] memulai Vite (port juga otomatis)...')
     const viteChild = spawn(process.execPath, [vite], {
       stdio: ['ignore', 'pipe', 'inherit'],
@@ -90,7 +98,7 @@ waitForMarker(rustChild.stdout, /Finova siap di http:\/\/127\.0\.0\.1:(\d+)/, 24
   .then((vitePort) => {
     console.log('')
     console.log(`[dev] buka http://localhost:${vitePort} di peramban (HMR aktif).`)
-    console.log(`[dev] aplikasi desktop: npm run build && npm start`)
+    console.log('[dev] web produksi: bun run build && bun start')
     console.log('')
   })
   .catch((error) => {

@@ -2,7 +2,6 @@ node_modules/
 dist/
 dist-server/
 bin/
-target/
 build/bin/
 build/windows/installer/tmp/
 release/
@@ -22,9 +21,11 @@ database/*.db
 database/*.db-shm
 database/*.db-wal
 
-# Profil Chromium jendela WebView2 (cache & shader, dibuat otomatis saat -app)
+# Profil peramban jendela WebView2 (cache & shader) — versi Bun memakai
+# peramban sistem, entri ini disimpan untuk basis data lama.
 database/webview2/
 
-# Hasil build frontend ditanam ke biner; hanya penanda folder yang di-commit
+# Hasil build frontend disajikan server Bun dari disk; hanya penanda folder
+# yang di-commit.
 internal/web/dist/*
 !internal/web/dist/.gitkeep

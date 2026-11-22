@@ -1,5 +1,5 @@
-// API Client layer for Finova — Rust Native Backend
-// Connects to Axum + SQLite backend at /api with in-app engine resilience.
+// API Client layer for Finova — backend Bun (bun:sqlite) di /api
+// dengan ketahanan engine lokal di dalam aplikasi.
 import { accountingEngine } from './backend/accountingEngine.js'
 
 const API = '/api'
@@ -21,11 +21,11 @@ export async function request(path, options = {}) {
     if (response.status === 204) return null
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
-      throw new Error(payload.message || 'Permintaan tidak dapat diproses oleh server Rust.')
+      throw new Error(payload.message || 'Permintaan tidak dapat diproses oleh server Bun.')
     }
     return payload
   } catch (err) {
-    // Jika koneksi ke server Rust gagal (misal dijalankan standalone `vite` tanpa dev.mjs),
+    // Jika koneksi ke server Bun gagal (misal dijalankan standalone `vite` tanpa dev.mjs),
     // gunakan fallback engine lokal agar UI tetap responsif.
     if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('Load failed'))) {
       console.warn('[api] Server Rust belum terhubung di /api, mengalihkan ke engine lokal:', path)
@@ -40,7 +40,7 @@ export async function download(path, filename) {
     const response = await fetch(`${API}${path}`)
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}))
-      throw new Error(payload.message || 'Berkas tidak dapat diunduh dari server Rust.')
+      throw new Error(payload.message || 'Berkas tidak dapat diunduh dari server Bun.')
     }
     const link = document.createElement('a')
     link.href = URL.createObjectURL(await response.blob())

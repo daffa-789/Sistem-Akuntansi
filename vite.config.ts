@@ -2,12 +2,12 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 
-// Hasil build ditulis ke internal/web/dist agar ikut tertanam ke biner Go
-// (lihat internal/web/web.go). Jangan memindahkan folder ini tanpa menyesuaikan
-// pola //go:embed pada package web.
+// Hasil build ditulis ke internal/web/dist supaya bisa disajikan oleh server
+// Bun (lihat server/index.ts & server/http/router.ts). Folder ini juga menjadi
+// folder kerja default ketika server berjalan dari repo.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  // Port API Go dipilih scripts/dev.mjs setelah backend benar-benar bind; tanpa
+  // Port API Bun dipilih scripts/dev.mjs setelah backend benar-benar bind; tanpa
   // nilai itu tidak ada proxy yang masuk akal, jadi lebih baik diberi tahu.
   const apiPort = Number(env.VITE_API_PORT || env.PORT || 0)
   if (!apiPort) {
