@@ -7,6 +7,7 @@ Finova adalah aplikasi akuntansi **web** dengan backend **Bun** (`bun:sqlite`, H
 - Bagan akun, periode akuntansi, dan penutupan periode.
 - Jurnal umum: buat, edit, posting, flag, reverse, dan nomor voucher otomatis.
 - Template jurnal serta impor data dari Excel.
+- **Siklus Penggajian / SDM**: tujuh bagian sesuai BAB V PPT — pengertian/tujuan, lima aktivitas, komponen hitung, delapan dokumen, contoh jurnal, pengendalian internal. Data induk karyawan, absensi & lembur, THR prorata, BPJS enam program, PPh 21 TER/Pasal 17, slip gaji, serta jurnal akrual dan pembayaran otomatis. Perubahan data/gaji perlu persetujuan; daftar penerima diverifikasi dan gaji direkonsiliasi dengan akuntansi serta bank.
 - Audit trail per jurnal.
 - Laporan: buku besar, neraca saldo, jurnal, laba rugi, neraca, arus kas, dan perubahan ekuitas.
 - Ekspor XLSX dan PDF tanpa dependensi berat tambahan.
@@ -50,7 +51,7 @@ Tanpa `bin/finova.exe`, `bun start` otomatis menjalankan `server/index.ts` dari 
 ## Testing
 
 ```bash
-bun run test         # 46 test server (Bun) + 28 test UI (Vitest)
+bun run test         # 67 test server (Bun) + 31 test UI (Vitest)
 bun run test:server  # hanya server
 bun run test:ui      # hanya UI
 bun run typecheck    # TypeScript
@@ -95,6 +96,16 @@ Lewat variabel lingkungan atau berkas `.env`:
 - `GET/POST /api/templates`, `DELETE /api/templates/{id}` — template jurnal.
 - `POST /api/imports/template`, `/api/imports/preview`, `/api/imports/confirm` — impor Excel.
 - `/api/exports/...` — ekspor XLSX dan PDF.
+- `/api/payroll/employees` — data induk karyawan (CRUD; DELETE menonaktifkan).
+- `/api/payroll/periods` — periode gaji beserta status DRAFT/APPROVED/PAID.
+- `/api/payroll/periods/:id/lines` — input kehadiran dan hasil hitung per karyawan.
+- `/api/payroll/periods/:id/run` — hitung gaji, BPJS, PPh 21, dan THR.
+- `/api/payroll/periods/:id/approve` — posting jurnal akrual gaji.
+- `/api/payroll/periods/:id/pay` — posting jurnal pembayaran gaji.
+- `/api/payroll/journals` — daftar jurnal payroll untuk UI.
+- `/api/payroll/change-requests` — pengajuan dan persetujuan perubahan data karyawan/gaji (`POST /:id/decide`).
+- `/api/payroll/periods/:id/documents` — delapan dokumen PPT per periode; `DELETE /api/payroll/documents/:id`.
+- `/api/payroll/periods/:id/controls` — verifikasi daftar penerima dan rekonsiliasi gaji–akuntansi–bank.
 - `/api/music/...` — pemutar musik lokal/YouTube.
 
 ## Catatan

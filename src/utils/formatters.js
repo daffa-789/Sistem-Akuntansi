@@ -72,5 +72,6 @@ export const SOURCE_LABEL = {
   MANUAL: 'Manual',
   IMPORT: 'Impor Excel',
   CLOSING: 'Jurnal Penutup',
-  REVERSAL: 'Pembalik'
+  REVERSAL: 'Pembalik',
+  PAYROLL: 'Penggajian'
 }

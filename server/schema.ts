@@ -159,6 +159,9 @@ INSERT OR IGNORE INTO accounts (company_id, code, name, account_group, account_s
   (1, '2100', 'Utang Usaha', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
   (1, '2110', 'Utang Gaji', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
   (1, '2120', 'Pendapatan Diterima Dimuka', 'LIABILITY', 'UNEARNED_REVENUE', 'CREDIT', 'OPERATING', 0),
+  (1, '2130', 'Utang BPJS', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
+  (1, '2140', 'Utang PPh 21', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
+  (1, '2150', 'Utang Potongan Lain', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
   (1, '2200', 'Utang Bank', 'LIABILITY', 'LOAN', 'CREDIT', 'FINANCING', 0),
   (1, '3100', 'Modal Pemilik', 'EQUITY', 'OWNER_CAPITAL', 'CREDIT', 'FINANCING', 0),
   (1, '3200', 'Prive Pemilik', 'EQUITY', 'DRAWINGS', 'DEBIT', 'FINANCING', 0),
@@ -198,4 +201,149 @@ CREATE INDEX IF NOT EXISTS idx_music_tracks_position ON music_tracks(company_id,
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_music_tracks_youtube
   ON music_tracks(company_id, youtube_id) WHERE youtube_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS payroll_employees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  employee_code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  department TEXT NOT NULL DEFAULT '',
+  position TEXT NOT NULL DEFAULT '',
+  employment_type TEXT NOT NULL DEFAULT 'PKWTT',
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  join_date TEXT NOT NULL,
+  exit_date TEXT NULL,
+  ptkp_status TEXT NOT NULL DEFAULT 'TK0',
+  npwp TEXT NULL,
+  bank_name TEXT NULL,
+  bank_account TEXT NULL,
+  basic_salary REAL NOT NULL DEFAULT 0,
+  fixed_allowance REAL NOT NULL DEFAULT 0,
+  jkk_risk_class INTEGER NOT NULL DEFAULT 1,
+  family_members INTEGER NOT NULL DEFAULT 0,
+  is_expatriate INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, employee_code)
+);
+
+CREATE TABLE IF NOT EXISTS payroll_periods (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  pay_date TEXT NULL,
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  approved_by INTEGER REFERENCES users(id),
+  approved_at TEXT NULL,
+  paid_by INTEGER REFERENCES users(id),
+  paid_at TEXT NULL,
+  accrual_journal_id INTEGER REFERENCES journal_entries(id),
+  payment_journal_id INTEGER REFERENCES journal_entries(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, period)
+);
+
+CREATE TABLE IF NOT EXISTS payroll_inputs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  period_id INTEGER NOT NULL REFERENCES payroll_periods(id) ON DELETE CASCADE,
+  employee_id INTEGER NOT NULL REFERENCES payroll_employees(id),
+  absent_days REAL NOT NULL DEFAULT 0,
+  overtime_hours REAL NOT NULL DEFAULT 0,
+  holiday_overtime_hours REAL NOT NULL DEFAULT 0,
+  thr_amount REAL NOT NULL DEFAULT 0,
+  other_allowance REAL NOT NULL DEFAULT 0,
+  other_deduction REAL NOT NULL DEFAULT 0,
+  notes TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(period_id, employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS payroll_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  period_id INTEGER NOT NULL REFERENCES payroll_periods(id) ON DELETE CASCADE,
+  employee_id INTEGER NOT NULL REFERENCES payroll_employees(id),
+  version INTEGER NOT NULL DEFAULT 1,
+  tax_mode TEXT NOT NULL DEFAULT 'TER',
+  tax_category TEXT NOT NULL DEFAULT 'A',
+  gross_cash REAL NOT NULL DEFAULT 0,
+  overtime_pay REAL NOT NULL DEFAULT 0,
+  thr_amount REAL NOT NULL DEFAULT 0,
+  other_allowance REAL NOT NULL DEFAULT 0,
+  bpjs_kesehatan_employee REAL NOT NULL DEFAULT 0,
+  bpjs_kesehatan_employer REAL NOT NULL DEFAULT 0,
+  jht_employee REAL NOT NULL DEFAULT 0,
+  jht_employer REAL NOT NULL DEFAULT 0,
+  jp_employee REAL NOT NULL DEFAULT 0,
+  jp_employer REAL NOT NULL DEFAULT 0,
+  jkk_employer REAL NOT NULL DEFAULT 0,
+  jkm_employer REAL NOT NULL DEFAULT 0,
+  tax_bruto REAL NOT NULL DEFAULT 0,
+  pph21 REAL NOT NULL DEFAULT 0,
+  other_deduction REAL NOT NULL DEFAULT 0,
+  net_pay REAL NOT NULL DEFAULT 0,
+  employer_contribution REAL NOT NULL DEFAULT 0,
+  employer_cost REAL NOT NULL DEFAULT 0,
+  calculation_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(period_id, employee_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_payroll_runs_period ON payroll_runs(company_id, period_id, employee_id);
+CREATE INDEX IF NOT EXISTS idx_payroll_inputs_period ON payroll_inputs(company_id, period_id);
+
+-- Bagian E BAB V.pptx: aktivitas a (perubahan data disetujui), dokumen
+-- (slide 28), dan pengendalian internal (slide 30).
+CREATE TABLE IF NOT EXISTS payroll_change_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  employee_id INTEGER NOT NULL REFERENCES payroll_employees(id) ON DELETE CASCADE,
+  field_name TEXT NOT NULL,
+  old_value TEXT NULL,
+  new_value TEXT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  requested_by_role TEXT NOT NULL DEFAULT 'SDM',
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TEXT NULL,
+  decision_note TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_payroll_change_requests_status
+  ON payroll_change_requests(company_id, status);
+
+CREATE TABLE IF NOT EXISTS payroll_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  period_id INTEGER NOT NULL REFERENCES payroll_periods(id) ON DELETE CASCADE,
+  doc_type TEXT NOT NULL,
+  reference_no TEXT NOT NULL DEFAULT '',
+  doc_date TEXT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  note TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, period_id, doc_type)
+);
+
+CREATE TABLE IF NOT EXISTS payroll_control_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  period_id INTEGER NOT NULL REFERENCES payroll_periods(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  expected_value REAL NOT NULL DEFAULT 0,
+  actual_value REAL NOT NULL DEFAULT 0,
+  difference REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'DONE',
+  operator_id INTEGER REFERENCES users(id),
+  operator_role TEXT NOT NULL DEFAULT '',
+  checked_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  note TEXT NULL,
+  UNIQUE(company_id, period_id, kind)
+);
 `

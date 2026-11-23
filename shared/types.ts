@@ -4,7 +4,7 @@ export type AccountGroup = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPEN
 export type NormalBalance = 'DEBIT' | 'CREDIT'
 export type CashFlowCategory = 'OPERATING' | 'INVESTING' | 'FINANCING' | 'NON_CASH'
 export type JournalStatus = 'DRAFT' | 'POSTED' | 'REVERSED'
-export type JournalSource = 'MANUAL' | 'IMPORT' | 'CLOSING' | 'REVERSAL'
+export type JournalSource = 'MANUAL' | 'IMPORT' | 'CLOSING' | 'REVERSAL' | 'PAYROLL'
 export type PeriodStatus = 'OPEN' | 'CLOSED'
 export type UserRole = 'ADMIN' | 'STAFF' | 'ACCOUNTANT' | 'VIEWER' | string
 

@@ -17,6 +17,7 @@ import { journalRoutes } from './routes/journals'
 import { reportRoutes } from './routes/reports'
 import { importRoutes } from './routes/imports'
 import { exportRoutes } from './routes/exports'
+import { payrollRoutes } from './routes/payroll'
 import { musicRoutes } from './routes/music'
 
 export type ServerHandle = ReturnType<typeof Bun.serve>
@@ -66,6 +67,7 @@ export function createFinovaApp(overrides: AppOverrides = {}): FinovaApp {
     ...reportRoutes(state),
     ...importRoutes(state),
     ...exportRoutes(state),
+    ...payrollRoutes(state),
     ...musicRoutes(state)
   ] as Array<[string, string, (ctx: any) => Response | Promise<Response>]>) {
     router.add(method, pattern, handler)

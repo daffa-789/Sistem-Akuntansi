@@ -35,14 +35,14 @@ describe('Db.bootstrap', () => {
     expect(names).toContain('music_tracks')
   })
 
-  it('menyemai 36 akun standar dan 12 periode', () => {
+  it('menyemai 39 akun standar dan 12 periode', () => {
     const db = Db.open(dbFile)
     db.bootstrap(1, 'PT Uji', 'Operator Uji')
     const accounts = db.connection.query('SELECT COUNT(*) AS c FROM accounts').get() as { c: number }
     const periods = db.connection
       .query('SELECT COUNT(*) AS c FROM accounting_periods')
       .get() as { c: number }
-    expect(accounts.c).toBe(36)
+    expect(accounts.c).toBe(39)
     expect(periods.c).toBe(12)
   })
 
@@ -65,7 +65,7 @@ describe('Db.bootstrap', () => {
       c: number
     }
     expect(usersAgain.c).toBe(1)
-    expect(accountsAgain.c).toBe(36)
+    expect(accountsAgain.c).toBe(39)
   })
 })
 
@@ -104,7 +104,7 @@ describe('Db.clean', () => {
     const periods = db.connection
       .query('SELECT COUNT(*) AS c FROM accounting_periods')
       .get() as { c: number }
-    expect(accounts.c).toBe(36)
+    expect(accounts.c).toBe(39)
     expect(periods.c).toBe(12)
   })
 })
