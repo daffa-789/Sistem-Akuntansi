@@ -23,6 +23,9 @@ const employee = {
 const period = { id: 1, period: '2026-11', pay_date: '2026-11-30', status: 'DRAFT' }
 
 function payloadFor(url: string): any {
+  if (url.includes('/api/company')) {
+    return { company: { id: 1, name: 'PT Nusantara Konsumerindo Tbk' } }
+  }
   if (url.includes('/employees')) return { employees: [employee] }
   if (url.includes('/change-requests')) return { requests: [] }
   if (url.includes('/parameters')) return { ptkp: { TK0: 0 }, jkkRates: [0.24, 0.54, 0.89, 1.27, 1.74] }
@@ -112,6 +115,7 @@ describe('PayrollCycleView sesuai BAB V.pptx', () => {
     expect(container.textContent).toContain('Pengelolaan data karyawan')
     expect(container.textContent).toContain('Pencatatan akuntansi')
     expect(container.textContent).toContain('Gaji Bersih = Gaji Bruto − Total Potongan')
+    expect(container.textContent).toContain('PT Nusantara Konsumerindo Tbk')
   })
 
   it('menampilkan delapan dokumen pada tab Dokumen', async () => {

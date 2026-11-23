@@ -20,6 +20,7 @@ database/*.sqlite-wal
 database/*.db
 database/*.db-shm
 database/*.db-wal
+database/*.lock
 
 # Profil peramban jendela WebView2 (cache & shader) — versi Bun memakai
 # peramban sistem, entri ini disimpan untuk basis data lama.

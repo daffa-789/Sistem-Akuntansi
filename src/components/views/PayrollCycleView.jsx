@@ -233,6 +233,7 @@ const NOOP = () => {}
 export function PayrollCycleView({ notify = NOOP }) {
   const [view, setView] = useState('summary')
   const [employees, setEmployees] = useState([])
+  const [company, setCompany] = useState(null)
   const [periods, setPeriods] = useState([])
   const [parameters, setParameters] = useState(null)
   const [journals, setJournals] = useState([])
@@ -260,7 +261,8 @@ export function PayrollCycleView({ notify = NOOP }) {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [employeeResult, periodResult, parameterResult, journalResult, requestResult] = await Promise.allSettled([
+    const [companyResult, employeeResult, periodResult, parameterResult, journalResult, requestResult] = await Promise.allSettled([
+      request('/api/company'),
       request('/api/payroll/employees'),
       request('/api/payroll/periods'),
       request('/api/payroll/parameters'),
@@ -268,6 +270,7 @@ export function PayrollCycleView({ notify = NOOP }) {
       request('/api/payroll/change-requests')
     ])
     const failures = []
+    if (companyResult.status === 'fulfilled') setCompany(companyResult.value?.company || null)
     if (employeeResult.status === 'fulfilled') {
       setEmployees(employeeResult.value?.employees || [])
     } else {
@@ -651,6 +654,7 @@ export function PayrollCycleView({ notify = NOOP }) {
         number="04"
         title="Siklus Penggajian / SDM"
         description="Mengelola data karyawan, kehadiran, perhitungan gaji, pembayaran, pencatatan akuntansi, dokumen, dan pengendalian internal sesuai BAB V Sistem Informasi Akuntansi."
+        companyName={company?.name || 'PT Finova Akuntansi Indonesia'}
         actions={<><Button variant="secondary" onClick={openPeriodModal}><CalendarDays size={15} /> Tambah periode</Button><Button onClick={() => openEmployeeModal(null)}><Plus size={15} /> Tambah karyawan</Button></>}
       />
       <CycleTabs value={view} items={VIEWS} onChange={setView} />
