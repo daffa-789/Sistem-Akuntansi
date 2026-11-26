@@ -89,12 +89,16 @@ export interface PayrollEmployeeInput {
   jkkRiskClass: number
   familyMembers: number
   isExpatriate: boolean
+  prorationFactor?: number
+  activeDays?: number
+  calendarDays?: number
 }
 
 export interface PayrollPeriodInput {
   period: string
   absentDays: number
   overtimeHours: number
+  overtimeDays?: number
   holidayOvertimeHours: number
   thrAmount: number
   otherAllowance: number
@@ -114,9 +118,11 @@ export interface PayrollYtd {
 export interface PayrollCalculation {
   taxMode: TaxMode
   taxCategory: TerCategory | null
+  terCategory: TerCategory
   absenceDeduction: number
   overtimePay: number
   thrAmount: number
+  otherAllowance: number
   grossCash: number
   bpjsKesehatanEmployee: number
   bpjsKesehatanEmployer: number
@@ -129,6 +135,8 @@ export interface PayrollCalculation {
   employerContribution: number
   taxBruto: number
   pph21: number
+  otherDeduction: number
+  totalDeductions: number
   netPay: number
   employerCost: number
   calculation: Record<string, unknown>
@@ -165,12 +173,20 @@ export function progressiveTax(taxableIncome: number): number {
   return tax
 }
 
-function overtimePayOf(basicPlusFixed: number, regularHours: number, holidayHours: number): number {
+function overtimePayOf(
+  basicPlusFixed: number,
+  regularHours: number,
+  overtimeDays: number,
+  holidayHours: number
+): number {
   const hourly = basicPlusFixed / 173
-  const firstHour = Math.min(regularHours, 1) * hourly * 1.5
-  const rest = Math.max(0, regularHours - 1) * hourly * 2
+  const days = regularHours > 0 ? Math.max(1, Math.floor(overtimeDays)) : 0
+  const firstHours = Math.min(regularHours, days)
+  const rest = Math.max(0, regularHours - firstHours)
+  const first = firstHours * hourly * 1.5
+  const subsequent = rest * hourly * 2
   const holiday = holidayHours * hourly * 2
-  return roundMoney(firstHour + rest + holiday)
+  return roundMoney(first + subsequent + holiday)
 }
 
 /**
@@ -196,30 +212,49 @@ export function calculatePayroll(
   const basic = Math.max(0, Number(employee.basicSalary) || 0)
   const fixed = Math.max(0, Number(employee.fixedAllowance) || 0)
   const wage = basic + fixed
-  const absenceDeduction = roundMoney((wage / 30) * Math.max(0, Number(period.absentDays) || 0))
+  const [year, month] = period.period.split('-').map(Number)
+  const calendarDays = Math.max(
+    1,
+    Math.floor(Number(employee.calendarDays) || new Date(Date.UTC(year, month, 0)).getUTCDate())
+  )
+  const activeDays = Math.min(
+    calendarDays,
+    Math.max(0, Math.floor(Number(employee.activeDays ?? calendarDays)))
+  )
+  const prorationFactor = Math.min(1, Math.max(0, Number(employee.prorationFactor ?? activeDays / calendarDays)))
+  const proratedWage = roundMoney(wage * prorationFactor)
+  const absenceDeduction = roundMoney(Math.min(
+    proratedWage,
+    (wage / 30) * Math.min(calendarDays, Math.max(0, Number(period.absentDays) || 0), activeDays)
+  ))
+  const overtimeDays = Math.max(1, Math.floor(Number(period.overtimeDays) || 1))
   const overtimePay = overtimePayOf(
     wage,
     Math.max(0, Number(period.overtimeHours) || 0),
+    overtimeDays,
     Math.max(0, Number(period.holidayOvertimeHours) || 0)
   )
   const thrAmount = roundMoney(Math.max(0, Number(period.thrAmount) || 0))
   const otherAllowance = roundMoney(Math.max(0, Number(period.otherAllowance) || 0))
   const otherDeduction = roundMoney(Math.max(0, Number(period.otherDeduction) || 0))
-  const grossCash = roundMoney(Math.max(0, wage - absenceDeduction + overtimePay + thrAmount + otherAllowance))
+  const grossCash = roundMoney(Math.max(
+    0,
+    proratedWage - absenceDeduction + overtimePay + thrAmount + otherAllowance
+  ))
 
   // BPJS dipotong dari upah pokok + tunjangan tetap, bukan dari lembur/THR.
-  const healthBase = Math.min(wage, BPJS_KESEHATAN_CAP)
+  const healthBase = Math.min(proratedWage, BPJS_KESEHATAN_CAP)
   const extraFamily = Math.max(0, Math.floor(Number(employee.familyMembers) || 0))
   const bpjsKesehatanEmployee = roundMoney(healthBase * 0.01 * (1 + extraFamily))
   const bpjsKesehatanEmployer = roundMoney(healthBase * 0.04)
-  const jhtEmployee = roundMoney(wage * 0.02)
-  const jhtEmployer = roundMoney(wage * 0.037)
-  const jpBase = employee.isExpatriate ? 0 : Math.min(wage, jpWageCap(period.period))
+  const jhtEmployee = roundMoney(proratedWage * 0.02)
+  const jhtEmployer = roundMoney(proratedWage * 0.037)
+  const jpBase = employee.isExpatriate ? 0 : Math.min(proratedWage, jpWageCap(period.period))
   const jpEmployee = roundMoney(jpBase * 0.01)
   const jpEmployer = roundMoney(jpBase * 0.02)
   const riskIndex = Math.min(4, Math.max(0, Math.floor(Number(employee.jkkRiskClass) || 1) - 1))
-  const jkkEmployer = roundMoney(wage * JKK_RATES[riskIndex])
-  const jkmEmployer = roundMoney(wage * 0.003)
+  const jkkEmployer = roundMoney(proratedWage * JKK_RATES[riskIndex])
+  const jkmEmployer = roundMoney(proratedWage * 0.003)
   const employerContribution = roundMoney(
     bpjsKesehatanEmployer + jhtEmployer + jpEmployer + jkkEmployer + jkmEmployer
   )
@@ -241,14 +276,19 @@ export function calculatePayroll(
     pph21 = roundMoney(taxBruto * terRate(category, taxBruto))
   }
 
-  const netPay = roundMoney(
-    Math.max(0, grossCash - bpjsKesehatanEmployee - jhtEmployee - jpEmployee - pph21 - otherDeduction)
+  const totalDeductions = roundMoney(
+    bpjsKesehatanEmployee + jhtEmployee + jpEmployee + pph21 + otherDeduction
   )
+  if (totalDeductions > grossCash + 0.01) {
+    throw new Error('Total potongan melebihi gaji kotor; periksa absensi, pajak, dan potongan lain.')
+  }
+  const netPay = roundMoney(grossCash - totalDeductions)
   const employerCost = roundMoney(grossCash + employerContribution)
 
   return {
     taxMode: period.taxMode,
     taxCategory: period.taxMode === 'TER' ? category : null,
+    terCategory: category,
     absenceDeduction,
     overtimePay,
     thrAmount,
@@ -263,19 +303,27 @@ export function calculatePayroll(
     jkkEmployer,
     jkmEmployer,
     employerContribution,
-  taxBruto,
-  pph21,
-  otherDeduction,
-  netPay,
+    taxBruto,
+    pph21,
+    otherDeduction,
+    totalDeductions,
+    netPay,
     employerCost,
     calculation: {
       basic,
       fixedAllowance: fixed,
       wageBasis: wage,
+      proratedWage,
+      prorationFactor,
+      activeDays,
+      calendarDays,
+      absenceDeduction,
+      overtimeDays,
       healthBase,
       jpBase,
       jkkRate: JKK_RATES[riskIndex],
       ptkp: PTKP_AMOUNT[employee.ptkpStatus] ?? PTKP_AMOUNT.TK0,
+      terCategory: category,
       ytd
     }
   }

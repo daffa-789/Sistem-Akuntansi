@@ -10,10 +10,11 @@ import { SCHEMA_SQL } from './schema'
 export const LOGIN_DISABLED_HASH = '!!login-dinonaktifkan!!'
 
 export interface TableCounts {
+  payroll_periods: number
+  payroll_runs: number
   journal_entries: number
   journal_lines: number
   audit_logs: number
-  import_batches: number
 }
 
 export class Db {
@@ -65,6 +66,8 @@ export class Db {
         if (s) this.db.run(s)
       }
 
+      this.migrate()
+
       this.db.run(
         "INSERT OR IGNORE INTO companies (id, name, currency) VALUES (?, ?, 'IDR')",
         [companyId, companyName]
@@ -101,12 +104,26 @@ export class Db {
     })
   }
 
+  private migrate(): void {
+    const columns = this.db.query('PRAGMA table_info(payroll_inputs)').all() as Array<{ name: string }>
+    if (!columns.some((column) => column.name === 'overtime_days')) {
+      this.db.run(
+        'ALTER TABLE payroll_inputs ADD COLUMN overtime_days INTEGER NOT NULL DEFAULT 1'
+      )
+    }
+    this.db.run('INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)')
+  }
+
   clean(companyId: number): { before: TableCounts; after: TableCounts } {
     return this.withTransaction(() => {
       const getCounts = (): TableCounts => {
         const one = (sql: string, params: (number)[]): number =>
           (this.db.query(sql).get(...params) as { c: number } | null)?.c ?? 0
         return {
+          payroll_periods: one('SELECT COUNT(*) AS c FROM payroll_periods WHERE company_id = ?', [
+            companyId
+          ]),
+          payroll_runs: one('SELECT COUNT(*) AS c FROM payroll_runs WHERE company_id = ?', [companyId]),
           journal_entries: one('SELECT COUNT(*) AS c FROM journal_entries WHERE company_id = ?', [
             companyId
           ]),
@@ -114,21 +131,24 @@ export class Db {
             'SELECT COUNT(*) AS c FROM journal_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE company_id = ?)',
             [companyId]
           ),
-          audit_logs: one('SELECT COUNT(*) AS c FROM audit_logs WHERE company_id = ?', [companyId]),
-          import_batches: one('SELECT COUNT(*) AS c FROM import_batches WHERE company_id = ?', [
-            companyId
-          ])
+          audit_logs: one('SELECT COUNT(*) AS c FROM audit_logs WHERE company_id = ?', [companyId])
         }
       }
 
       const before = getCounts()
+      this.db.run('DELETE FROM payroll_control_checks WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM payroll_documents WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM payroll_change_requests WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM payroll_runs WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM payroll_inputs WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM payroll_periods WHERE company_id = ?', [companyId])
+      this.db.run('UPDATE journal_entries SET reversal_of_id = NULL WHERE company_id = ?', [companyId])
       this.db.run(
         'DELETE FROM journal_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE company_id = ?)',
         [companyId]
       )
       this.db.run('DELETE FROM journal_entries WHERE company_id = ?', [companyId])
       this.db.run('DELETE FROM audit_logs WHERE company_id = ?', [companyId])
-      this.db.run('DELETE FROM import_batches WHERE company_id = ?', [companyId])
       const after = getCounts()
       return { before, after }
     })

@@ -79,7 +79,7 @@ if (isWindows) {
   compileArgs.push('--windows-title=Finova')
   compileArgs.push('--windows-publisher=Finova')
   compileArgs.push(`--windows-version=${version}.0`)
-  compileArgs.push('--windows-description=Finova - Sistem Akuntansi & Pembukuan')
+  compileArgs.push('--windows-description=Finova - Sistem Penggajian & SDM')
   compileArgs.push('--windows-copyright=Finova')
 }
 if (!run(bunBin, compileArgs)) {

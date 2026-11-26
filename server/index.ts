@@ -130,19 +130,21 @@ async function run(args: string[]): Promise<void> {
       database.bootstrap(cfg.companyId, cfg.companyName, cfg.operatorName)
       const { before, after } = database.clean(cfg.companyId)
       console.log('=== STATUS DATABASE SEBELUM PEMBERSIHAN ===')
+      console.log(`  - Periode Gaji: ${before.payroll_periods}`)
+      console.log(`  - Hasil Hitung Gaji: ${before.payroll_runs}`)
       console.log(`  - Jurnal: ${before.journal_entries}`)
       console.log(`  - Baris Jurnal: ${before.journal_lines}`)
       console.log(`  - Log Audit: ${before.audit_logs}`)
-      console.log(`  - Batch Impor: ${before.import_batches}`)
       console.log('')
       console.log('=== STATUS DATABASE SETELAH PEMBERSIHAN ===')
+      console.log(`  - Periode Gaji: ${after.payroll_periods}`)
+      console.log(`  - Hasil Hitung Gaji: ${after.payroll_runs}`)
       console.log(`  - Jurnal: ${after.journal_entries}`)
       console.log(`  - Baris Jurnal: ${after.journal_lines}`)
       console.log(`  - Log Audit: ${after.audit_logs}`)
-      console.log(`  - Batch Impor: ${after.import_batches}`)
       console.log('')
       console.log(
-        'Data transaksi dibersihkan. Bagan akun, periode, dan pengaturan perusahaan dipertahankan.'
+        'Data penggajian dibersihkan. Data karyawan, akun, periode, dan pengaturan perusahaan dipertahankan.'
       )
       break
     }
@@ -239,14 +241,14 @@ function archName(): string {
 }
 
 function printHelp(): void {
-  console.log('Finova — Sistem Akuntansi & Pembukuan Web Terpadu Indonesia')
+  console.log('Finova — Sistem Penggajian & SDM Indonesia')
   console.log('')
   console.log('Penggunaan:')
   console.log('  finova                 server lokal + buka di peramban sistem')
   console.log('  finova -browser        server + buka di peramban web')
   console.log('  finova -no-browser     server saja, tidak membuka apa pun')
   console.log('  finova db:init         inisialisasi database lokal')
-  console.log('  finova db:clean        bersihkan data transaksi, pertahankan akun & periode')
+  console.log('  finova db:clean        bersihkan data gaji, pertahankan karyawan, akun & periode')
   console.log('  finova version         tampilkan versi aplikasi')
   console.log('')
   console.log('Pilihan (Flags):')

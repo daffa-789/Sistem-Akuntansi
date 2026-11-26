@@ -6,18 +6,24 @@ description: "Memory terpusat Finova — aplikasi web Bun (bun:sqlite) + React/V
 scope: project
 project: "Sistem Akuntansi (Finova)"
 status: active
-updated: 2026-11-22
+updated: 2026-11-26
 tags: ["memory/project", "project/Sistem Akuntansi"]
 ---
 
 # Master Memory Workflow — Finova (Sistem Akuntansi)
 
-> **STATUS TERKINI (22 November 2026):** Finova adalah **aplikasi web saja** — backend Bun
-> (`bun:sqlite`) menyajikan React/Vite dari `internal/web/dist`, dibuka di peramban lewat
-> `bun run dev` / `bun run build && bun start`. Shell Electrobun/Hutch, installer, dan
-> skrip desktop sudah dihapus. Bagian R1–R9 dan arsip di bawah adalah **sejarah** (Go/Rust/
-> desktop); jangan dipakai sebagai instruksi build saat ini. Efek glow berwarna di UI juga
-> sudah dihapus; bayangan tipis dan ring fokus tetap ada.
+> **STATUS TERKINI (26 November 2026):** Finova sekarang **hanya Sistem Penggajian & SDM** —
+> backend Bun (`bun:sqlite`) + frontend React/Vite JavaScript/JSX, disajikan sebagai aplikasi
+> web dari `internal/web/dist`. Workspace, API payroll, delapan dokumen, jurnal akrual/
+> pembayaran, dan kontrol internal adalah satu-satunya produk aktif. Modul pendapatan,
+> pengeluaran, produksi, laporan akuntansi, jurnal umum, template, impor, ekspor, musik,
+> shell desktop, dan installer sudah dihapus.
+>
+> Enam akun gaji, periode akuntansi, tabel jurnal, dan validasi debit–kredit **tetap ada
+> sebagai infrastruktur internal payroll**, bukan modul akuntansi umum. `package.json`
+> memakai nama `finova-penggajian`. Verifikasi payroll-only: typecheck bersih, 57 test
+> server dan 10 test UI lulus. Seluruh bagian R1–R9 dan arsip di bawah adalah **sejarah**;
+> jangan dipakai sebagai instruksi build, dependensi, atau cakupan produk saat ini.
 >
 > Memory terpusat proyek ini, disusun 23 September 2026. Menggabungkan `README.md` proyek
 > (diarsipkan verbatim di bawah) dan **`Master_Memory_Workflow.md` versi memori Qoder**
@@ -29,10 +35,9 @@ tags: ["memory/project", "project/Sistem Akuntansi"]
 > teknis yang berlaku adalah R1–R6 dokumen ini; arsip tetap jadi rujukan sejarah keputusan.
 
 **Lokasi:** `C:\Users\Daffa\Desktop\Folder Space AI\Folder Space Semester 7\Sistem Akuntansi`
-**Nama produk:** *Finova — Sistem Akuntansi & Pembukuan Web Terpadu Indonesia*
-(`package.json`: `finova-akuntansi`, productName `Finova`, v1.0.0 · Go module `finova`, go 1.27.1)
-**Status:** aktif, ter-git. Commit fitur terakhir 2026-09-26 `feat(music): pemutar sesi di kanan atas, piringan benar-benar berputar` = `3ccbe9d` (17 berkas, +322/−1379); perubahan 2026-09-24 dan 2026-09-25 ikut terbawa di dalamnya.
-`README.md` proyek **sangat akurat** — semua klaimnya terverifikasi cocok dengan kode.
+**Nama produk:** *Finova — Sistem Penggajian & SDM Web*
+(`package.json`: `finova-penggajian`, productName `Finova`, v1.0.0)
+**Status:** aktif, ter-git, satu branch `main`; cakupan produk saat ini hanya payroll/SDM.
 
 **Koreksi 2026-09-26:** angka di bawah diukur ulang 26 Sep. Versi **kembali ke 1.0.0** atas
 permintaan user (naik ke 1.0.1 pada 25 Sep lalu dibatalkan; artefak `Finova-Setup-1.0.1-amd64.exe`

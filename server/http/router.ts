@@ -1,6 +1,6 @@
 // Router HTTP minimal + CORS + penyaji aset statis — pengganti Axum.
 //
-// Pola: [METHOD /api/journals/:id] dengan parameter path. Tidak ada dependensi;
+// Pola: [METHOD /api/payroll/periods/:id] dengan parameter path. Tidak ada dependensi;
 // Bun.serve memanggil fetchHandler untuk setiap permintaan.
 import { AppError, mapError } from '../errors'
 import fs from 'node:fs'

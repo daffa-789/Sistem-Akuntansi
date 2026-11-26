@@ -37,8 +37,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            vendor: ['react', 'react-dom'],
-            charts: ['recharts']
+            vendor: ['react', 'react-dom']
           }
         }
       }

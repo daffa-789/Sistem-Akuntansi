@@ -72,7 +72,7 @@ describe('hitung gaji', () => {
     expect(result.employerCost).toBe(11_024_000)
   })
 
-  it('lembur jam pertama 1,5x dan jam berikutnya 2x', () => {
+  it('lembur jam pertama 1,5x per hari dan jam berikutnya 2x', () => {
     const result = calculatePayroll(
       { ...employee, basicSalary: 1_730_000 },
       period({ overtimeHours: 3 }),
@@ -81,6 +81,33 @@ describe('hitung gaji', () => {
     // Upah sejam Rp10.000 -> 10.000*1,5 + 20.000*2 = 55.000
     expect(result.overtimePay).toBe(55_000)
     expect(result.grossCash).toBe(1_785_000)
+
+    const twoDays = calculatePayroll(
+      { ...employee, basicSalary: 1_730_000 },
+      period({ overtimeHours: 4, overtimeDays: 2 } as Partial<PayrollPeriodInput>),
+      { gross: 0, tax: 0, pension: 0 }
+    )
+    // Dua jam pertama pada dua hari berbeda: 2*10.000*1,5 + 2*10.000*2.
+    expect(twoDays.overtimePay).toBe(70_000)
+  })
+
+  it('memprorasi upah untuk karyawan masuk atau keluar di tengah periode', () => {
+    const result = calculatePayroll(
+      { ...employee, prorationFactor: 0.5, activeDays: 15, calendarDays: 30 },
+      period(),
+      { gross: 0, tax: 0, pension: 0 }
+    )
+    expect(result.grossCash).toBe(5_000_000)
+    expect(result.jhtEmployee).toBe(100_000)
+    expect(result.calculation.prorationFactor).toBe(0.5)
+  })
+
+  it('menolak total potongan yang melebihi gaji kotor', () => {
+    expect(() => calculatePayroll(
+      { ...employee, basicSalary: 3_000_000 },
+      period({ otherDeduction: 100_000_000 }),
+      { gross: 0, tax: 0, pension: 0 }
+    )).toThrow('melebihi gaji kotor')
   })
 
   it('potongan absensi dikurangi dari gaji kotor', () => {
@@ -97,6 +124,7 @@ describe('hitung gaji', () => {
     )
     expect(result.taxMode).toBe('ANNUAL')
     expect(result.taxCategory).toBeNull()
+    expect(result.terCategory).toBe('A')
     expect(result.pph21).toBeGreaterThan(0)
     expect(result.pph21).toBeLessThan(1_000_000)
   })

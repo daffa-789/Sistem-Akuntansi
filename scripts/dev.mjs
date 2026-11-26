@@ -9,6 +9,7 @@
 //      penghuni port 3000/5199 setiap kali `npm run dev` dijalankan — itu
 //      mematikan dev server proyek lain di mesin yang sama.
 import { spawn, spawnSync } from 'node:child_process'
+import { stripVTControlCharacters } from 'node:util'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -125,7 +126,7 @@ function waitForMarker(stream, pattern, timeoutMs) {
       const text = chunk.toString()
       process.stdout.write(text)
       if (done) return
-      buffer = (buffer + text).slice(-4096)
+      buffer = (buffer + stripVTControlCharacters(text)).slice(-4096)
       const match = pattern.exec(buffer)
       if (match) {
         done = true

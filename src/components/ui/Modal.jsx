@@ -19,6 +19,7 @@ export function Modal({
   onClose,
   footer,
   maxWidth = '880px',
+  className = '',
   dirty = false,
   closeMessage = 'Buang perubahan yang belum disimpan?'
 }) {
@@ -86,7 +87,7 @@ export function Modal({
       }}
     >
       <div
-        className="modal"
+        className={`modal ${className}`.trim()}
         style={{ maxWidth }}
         tabIndex={-1}
         ref={dialogRef}

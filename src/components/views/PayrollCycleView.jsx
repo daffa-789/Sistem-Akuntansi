@@ -11,6 +11,7 @@ import {
   Landmark,
   Pencil,
   Plus,
+  Printer,
   RefreshCw,
   ShieldCheck,
   Users,
@@ -39,7 +40,7 @@ const NUMERIC_FIELDS = ['basic_salary', 'fixed_allowance', 'jkk_risk_class', 'fa
 const NULLABLE_FIELDS = ['exit_date', 'npwp', 'bank_name', 'bank_account']
 const CHANGE_FIELDS = [
   ...NUMERIC_FIELDS, 'is_expatriate', 'employee_code', 'name', 'department', 'position',
-  'employment_type', 'status', 'join_date', ...NULLABLE_FIELDS, 'ptkp_status'
+  'employment_type', 'join_date', ...NULLABLE_FIELDS, 'status', 'ptkp_status'
 ]
 const FIELD_LABELS = {
   employee_code: 'Kode karyawan', name: 'Nama', department: 'Bagian', position: 'Jabatan',
@@ -87,6 +88,16 @@ function lastDayOf(period) {
   if (!year || !month) return todayISO()
   const day = new Date(Date.UTC(year, month, 0)).getUTCDate()
   return `${period}-${String(day).padStart(2, '0')}`
+}
+
+function activeDaysOf(period, employee) {
+  if (!period || !employee?.join_date) return 0
+  const periodStart = `${period}-01`
+  const periodEnd = lastDayOf(period)
+  const start = employee.join_date > periodStart ? employee.join_date : periodStart
+  const end = employee.exit_date && employee.exit_date < periodEnd ? employee.exit_date : periodEnd
+  if (start > end) return 0
+  return Math.floor((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1
 }
 
 function dateText(value) {
@@ -157,6 +168,7 @@ function comparable(field, value) {
 function inputToDraft(input) {
   return {
     absent_days: input?.absent_days ?? 0,
+    overtime_days: input?.overtime_days ?? 1,
     overtime_hours: input?.overtime_hours ?? 0,
     holiday_overtime_hours: input?.holiday_overtime_hours ?? 0,
     thr_amount: input?.thr_amount ?? 0,
@@ -294,6 +306,11 @@ export function PayrollCycleView({ notify = NOOP }) {
   useEffect(() => { loadAll() }, [loadAll])
 
   useEffect(() => {
+    document.body.classList.toggle('payroll-print-slip', Boolean(slipModal))
+    return () => document.body.classList.remove('payroll-print-slip')
+  }, [slipModal])
+
+  useEffect(() => {
     if (!periods.length) {
       if (activePeriodId !== null) setActivePeriodId(null)
       return
@@ -353,10 +370,25 @@ export function PayrollCycleView({ notify = NOOP }) {
   const grossTotal = lines.reduce((sum, line) => sum + Number(line.run?.gross_cash || 0), 0)
   const netTotal = lines.reduce((sum, line) => sum + Number(line.run?.net_pay || 0), 0)
   const calculatedCount = lines.filter((line) => line.run).length
-  const pendingRequests = changeRequests.filter((request) => request.status === 'PENDING')
+  const staleCount = lines.filter((line) => line.run && line.stale).length
+  const pendingRequests = changeRequests
+    .filter((request) => request.status === 'PENDING')
+    .sort((left, right) => {
+      if (left.employee_id !== right.employee_id) return 0
+      // Status nonaktif hanya valid setelah tanggal keluar diterapkan.
+      if (left.field_name === 'exit_date' && right.field_name === 'status') return -1
+      if (left.field_name === 'status' && right.field_name === 'exit_date') return 1
+      return 0
+    })
+  const eligibleIds = new Set(lines.map((line) => line.employee.id))
+  const pendingPeriodRequests = pendingRequests.filter((request) => eligibleIds.has(request.employee_id))
   const verifiedDocuments = documents.filter((document) => document.status === 'VERIFIED').length
   const verificationCheck = controls.find((check) => check.kind === 'PAYEE_VERIFICATION')
   const reconciliationCheck = controls.find((check) => check.kind === 'RECONCILIATION')
+  const inputActiveDays = activeDaysOf(activePeriod?.period, inputModal?.line.employee)
+  const canApprove = isDraft && lines.length > 0 && calculatedCount === lines.length && staleCount === 0 && pendingPeriodRequests.length === 0
+  const canControl = activePeriod?.status === 'APPROVED'
+  const canPay = canControl && verificationCheck?.status === 'OK' && reconciliationCheck?.status === 'OK'
 
   const ptkpOptions = Object.keys(parameters?.ptkp || {}).length
     ? Object.keys(parameters.ptkp)
@@ -470,6 +502,7 @@ export function PayrollCycleView({ notify = NOOP }) {
         method: 'POST',
         body: {
           decision,
+          operator_role: 'ADMIN',
           note: decision === 'APPROVED' ? 'Disetujui sesuai ketentuan perubahan data karyawan.' : 'Ditolak oleh penanggung jawab.'
         }
       })
@@ -483,16 +516,14 @@ export function PayrollCycleView({ notify = NOOP }) {
     }
   }
 
-  async function deactivateEmployee(employee) {
-    if (!window.confirm(`Nonaktifkan karyawan ${employee.name} (${employee.employee_code})?`)) return
-    try {
-      await request(`/api/payroll/employees/${employee.id}`, { method: 'DELETE' })
-      notify('Karyawan berhasil dinonaktifkan.')
-      await loadAll()
-      refreshPeriodData()
-    } catch (err) {
-      notify(err.message || 'Gagal memproses permintaan.', true)
-    }
+  function requestDeactivation(employee) {
+    if (!window.confirm(`Ajukan nonaktif untuk karyawan ${employee.name} (${employee.employee_code})?`)) return
+    setEmployeeModal({
+      ...employeeToDraft(employee),
+      status: 'INACTIVE',
+      exit_date: todayISO(),
+      reason: 'Nonaktifkan karyawan sesuai data kepegawaian SDM.'
+    })
   }
 
   function openPeriodModal() {
@@ -561,6 +592,7 @@ export function PayrollCycleView({ notify = NOOP }) {
         method: 'PUT',
         body: {
           absent_days: Number(draft.absent_days || 0),
+          overtime_days: Number(draft.overtime_days || 1),
           overtime_hours: Number(draft.overtime_hours || 0),
           holiday_overtime_hours: Number(draft.holiday_overtime_hours || 0),
           thr_amount: Number(draft.thr_amount || 0),
@@ -668,7 +700,7 @@ export function PayrollCycleView({ notify = NOOP }) {
 
       {!loading && view === 'summary' && <>
         <div className="cycle-metrics">
-          <CycleMetric label="Karyawan aktif" value={activeCount} note={`${employees.length} karyawan terdaftar`} Icon={Users} />
+          <CycleMetric label="Karyawan aktif" value={activeCount} format="number" note={`${employees.length} karyawan terdaftar`} Icon={Users} />
           <CycleMetric label="Gaji kotor periode ini" value={grossTotal} note={calculatedCount ? `${calculatedCount} dari ${lines.length} baris dihitung` : 'Belum ada hasil perhitungan'} Icon={WalletCards} tone="is-amber" />
           <CycleMetric label="Gaji bersih periode ini" value={netTotal} note={activePeriod ? `Status ${activePeriod.status.toLowerCase()}` : 'Pilih periode terlebih dahulu'} Icon={Banknote} tone="is-green" />
           <CycleMetric label="Dokumen terverifikasi" value={`${verifiedDocuments}/8`} note={activePeriod ? `Periode ${periodLabel(activePeriod.period)}` : 'Belum ada periode'} Icon={FolderOpen} tone="is-blue" />
@@ -759,7 +791,7 @@ export function PayrollCycleView({ notify = NOOP }) {
                   <td><CycleStatus status={employee.status === 'ACTIVE' ? 'paid' : 'overdue'} label={employee.status === 'ACTIVE' ? 'Aktif' : 'Nonaktif'} /></td>
                   <td className="cycle-action-cell">
                     <Button small variant="ghost" onClick={() => openEmployeeModal(employee)} aria-label={`Ubah ${employee.name}`}><Pencil size={13} /> Ubah</Button>
-                    {employee.status === 'ACTIVE' && <Button small variant="secondary" onClick={() => deactivateEmployee(employee)}>Nonaktifkan</Button>}
+                    {employee.status === 'ACTIVE' && <Button small variant="secondary" onClick={() => requestDeactivation(employee)}>Ajukan nonaktif</Button>}
                   </td>
                 </tr>
               ))}
@@ -785,9 +817,9 @@ export function PayrollCycleView({ notify = NOOP }) {
                 <td className="cycle-action-cell" onClick={(event) => event.stopPropagation()}>
                   {period.status === 'DRAFT' && <>
                     <Button small variant="secondary" disabled={busy} onClick={() => runAction(`/api/payroll/periods/${period.id}/run`, 'Perhitungan gaji selesai.', period.id)}><Calculator size={13} /> Hitung gaji</Button>
-                    <Button small disabled={busy} onClick={() => runAction(`/api/payroll/periods/${period.id}/approve`, 'Periode disetujui. Jurnal akrual telah dibuat.', period.id)}>Setujui</Button>
+                    <Button small disabled={busy || (period.id === activePeriodId && !canApprove)} title="Semua karyawan harus dihitung ulang dan tidak ada perhitungan basi" onClick={() => runAction(`/api/payroll/periods/${period.id}/approve`, 'Periode disetujui. Jurnal akrual telah dibuat.', period.id)}>Setujui</Button>
                   </>}
-                  {period.status === 'APPROVED' && <Button small disabled={busy} onClick={() => runAction(`/api/payroll/periods/${period.id}/pay`, 'Gaji dibayar. Jurnal pembayaran telah dibuat.', period.id)}>Bayar</Button>}
+                  {period.status === 'APPROVED' && <Button small disabled={busy || (period.id === activePeriodId && !canPay)} title="Selesaikan verifikasi penerima dan rekonsiliasi sebelum membayar" onClick={() => runAction(`/api/payroll/periods/${period.id}/pay`, 'Gaji dibayar. Jurnal pembayaran telah dibuat.', period.id)}>Bayar</Button>}
                   {period.status === 'PAID' && <span className="muted">Selesai</span>}
                 </td>
               </tr>
@@ -806,6 +838,7 @@ export function PayrollCycleView({ notify = NOOP }) {
             <div><h2>Daftar gaji {periodLabel(activePeriod.period)}</h2><p>Status {activePeriod.status.toLowerCase()} · {calculatedCount} dari {lines.length} karyawan sudah dihitung. Gaji bersih = gaji bruto − total potongan.</p></div>
             <Button small variant="secondary" disabled={!isDraft || busy} onClick={() => runAction(`/api/payroll/periods/${activePeriod.id}/run`, 'Perhitungan gaji selesai.', activePeriod.id)}><RefreshCw size={13} /> Hitung ulang</Button>
           </div>
+          {staleCount > 0 && <div className="cycle-form-hint" style={{ color: '#8a3a3a' }}>{staleCount} perhitungan sudah tidak sesuai dengan data terbaru. Jalankan Hitung ulang sebelum menyetujui periode.</div>}
           <div className="cycle-table-wrap"><table className="cycle-table">
             <thead><tr><th>Karyawan</th><th>Status pajak</th><th className="num">Gaji kotor</th><th className="num">BPJS karyawan</th><th className="num">PPh 21</th><th className="num">Gaji bersih</th><th>Status hitung</th><th /></tr></thead>
             <tbody>
@@ -815,12 +848,12 @@ export function PayrollCycleView({ notify = NOOP }) {
                 return (
                   <tr key={line.employee.id}>
                     <td className="cycle-party"><strong>{line.employee.name}</strong><small>{line.employee.employee_code} · {line.employee.department || '—'}</small></td>
-                    <td>{run ? `${run.tax_mode} · ${run.tax_category || 'Progresif'}` : '—'}</td>
+                    <td>{run ? (run.tax_mode === 'TER' ? `TER · ${run.tax_category || '—'}` : 'Pasal 17 · tahunan') : '—'}</td>
                     <td className="num">{run ? money(run.gross_cash) : '—'}</td>
                     <td className="num">{run ? money(employeeBpjs) : '—'}</td>
                     <td className="num">{run ? money(run.pph21) : '—'}</td>
                     <td className="num">{run ? money(run.net_pay) : '—'}</td>
-                    <td>{run ? <CycleStatus status="complete" label="Dihitung" /> : <CycleStatus status="planned" label="Belum dihitung" />}</td>
+                    <td>{run ? (line.stale ? <CycleStatus status="hold" label="Perlu hitung ulang" /> : <CycleStatus status="complete" label="Dihitung" />) : <CycleStatus status="planned" label="Belum dihitung" />}</td>
                     <td className="cycle-action-cell">
                       <Button small variant="ghost" disabled={!run} onClick={() => setSlipModal(line)}>Lihat slip</Button>
                       {isDraft && <Button small variant="secondary" onClick={() => openInputModal(line)}><ClipboardList size={13} /> Input kehadiran</Button>}
@@ -887,6 +920,7 @@ export function PayrollCycleView({ notify = NOOP }) {
 
       {!loading && view === 'controls' && <>
         {!activePeriod ? <section className="panel panel-tight cycle-table-panel"><CycleEmpty>Buat periode terlebih dahulu untuk melakukan pengendalian internal.</CycleEmpty></section> : <>
+          {!canControl && <div className="cycle-form-hint" style={{ color: '#8a5a2b' }}>Verifikasi penerima dan rekonsiliasi tersedia setelah periode disetujui, sebelum pembayaran.</div>}
           <div className="cycle-two-column">
             <section className="panel cycle-card">
               <div className="cycle-card-heading"><div><h2>Pemisahan tugas</h2><p>Slide 30: SDM, pencatatan waktu, penggajian, dan pembayaran tidak digabung.</p></div><ShieldCheck size={18} /></div>
@@ -904,12 +938,12 @@ export function PayrollCycleView({ notify = NOOP }) {
               <div style={{ marginBottom: 10 }}>{controlBadge(verificationCheck?.status)}</div>
               <form className="cycle-form" onSubmit={(event) => { event.preventDefault(); saveControl('PAYEE_VERIFICATION', verificationDraft) }}>
                 <div className="cycle-form-grid">
-                  <label className="cycle-field"><span>Jumlah penerima pada daftar gaji</span><input className="input" value={controlSuggested.payeeCount} readOnly /></label>
-                  <label className="cycle-field"><span>Jumlah penerima terverifikasi</span><input className="input" type="number" min="0" value={verificationDraft.verified_count} onChange={(event) => setVerificationDraft({ ...verificationDraft, verified_count: event.target.value })} /></label>
-                  <label className="cycle-field"><span>Peran petugas</span><select className="input" value={verificationDraft.operator_role} onChange={(event) => setVerificationDraft({ ...verificationDraft, operator_role: event.target.value })}><option>SDM</option><option>PENGGAJIAN</option><option>AKUNTANSI</option></select></label>
-                  <label className="cycle-field cycle-field-wide"><span>Catatan</span><input className="input" value={verificationDraft.note} onChange={(event) => setVerificationDraft({ ...verificationDraft, note: event.target.value })} placeholder="Nomor daftar hadir / berita acara verifikasi" /></label>
+                  <label className="cycle-field"><span>Jumlah penerima pada daftar gaji</span><input className="input" value={controlSuggested.payeeCount} readOnly disabled={!canControl} /></label>
+                  <label className="cycle-field"><span>Jumlah penerima terverifikasi</span><input className="input" type="number" min="0" disabled={!canControl || busy} value={verificationDraft.verified_count} onChange={(event) => setVerificationDraft({ ...verificationDraft, verified_count: event.target.value })} /></label>
+                  <label className="cycle-field"><span>Peran petugas</span><select className="input" disabled={!canControl || busy} value={verificationDraft.operator_role} onChange={(event) => setVerificationDraft({ ...verificationDraft, operator_role: event.target.value })}><option>SDM</option><option>PENGGAJIAN</option></select></label>
+                  <label className="cycle-field cycle-field-wide"><span>Catatan</span><input className="input" disabled={!canControl || busy} value={verificationDraft.note} onChange={(event) => setVerificationDraft({ ...verificationDraft, note: event.target.value })} placeholder="Nomor daftar hadir / berita acara verifikasi" /></label>
                 </div>
-                <Button type="submit" small disabled={busy} style={{ marginTop: 10 }}>Simpan verifikasi</Button>
+                <Button type="submit" small disabled={!canControl || busy} style={{ marginTop: 10 }}>Simpan verifikasi</Button>
               </form>
             </section>
           </div>
@@ -920,7 +954,7 @@ export function PayrollCycleView({ notify = NOOP }) {
             <div className="cycle-breakdown">
               <div>
                 <DetailRow label="Gaji bersih" note="Dari daftar gaji" value={controlSuggested.netTotal} />
-                <DetailRow label="Jurnal pembayaran" note="Akun 1110 Bank" value={controlSuggested.accountingTotal} />
+                <DetailRow label="Utang gaji akrual" note="Akun 2110 · jurnal akrual" value={controlSuggested.accountingTotal} />
               </div>
               <div>
                 <DetailRow label="Selisih" note="Bank − daftar gaji" value={Number(reconciliationDraft.bank_total || 0) - controlSuggested.netTotal} />
@@ -928,16 +962,16 @@ export function PayrollCycleView({ notify = NOOP }) {
             </div>
             <form className="cycle-form" onSubmit={(event) => { event.preventDefault(); saveControl('RECONCILIATION', reconciliationDraft) }}>
               <div className="cycle-form-grid">
-                <label className="cycle-field"><span>Saldo/rekap transfer bank (Rp)</span><input className="input" type="number" min="0" step="1000" value={reconciliationDraft.bank_total} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, bank_total: event.target.value })} /></label>
-                <label className="cycle-field"><span>Peran petugas</span><select className="input" value={reconciliationDraft.operator_role} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, operator_role: event.target.value })}><option>AKUNTANSI</option><option>KEUANGAN</option><option>PENGGAJIAN</option></select></label>
-                <label className="cycle-field cycle-field-wide"><span>Catatan rekonsiliasi</span><input className="input" value={reconciliationDraft.note} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, note: event.target.value })} placeholder="Nomor bukti transfer / tanggal rekonsiliasi" /></label>
+                <label className="cycle-field"><span>Saldo/rekap transfer bank (Rp)</span><input className="input" type="number" min="0" step="0.01" disabled={!canControl || busy} value={reconciliationDraft.bank_total} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, bank_total: event.target.value })} /></label>
+                <label className="cycle-field"><span>Peran petugas</span><select className="input" disabled={!canControl || busy} value={reconciliationDraft.operator_role} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, operator_role: event.target.value })}><option>AKUNTANSI</option><option>KEUANGAN</option></select></label>
+                <label className="cycle-field cycle-field-wide"><span>Catatan rekonsiliasi</span><input className="input" disabled={!canControl || busy} value={reconciliationDraft.note} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, note: event.target.value })} placeholder="Nomor bukti transfer / tanggal rekonsiliasi" /></label>
               </div>
-              <Button type="submit" small disabled={busy} style={{ marginTop: 10 }}>Simpan rekonsiliasi</Button>
+              <Button type="submit" small disabled={!canControl || busy} style={{ marginTop: 10 }}>Simpan rekonsiliasi</Button>
             </form>
           </section>
 
           <section className="panel panel-tight cycle-table-panel" style={{ marginTop: 16 }}>
-            <div className="cycle-table-heading"><div><h2>Riwayat pemeriksaan</h2><p>Catatan verifikasi dan rekonsiliasi periode ini.</p></div></div>
+            <div className="cycle-table-heading"><div><h2>Pemeriksaan terbaru</h2><p>Status verifikasi dan rekonsiliasi terakhir untuk periode ini.</p></div></div>
             <div className="cycle-table-wrap"><table className="cycle-table">
               <thead><tr><th>Pemeriksaan</th><th>Harapan</th><th>Actual</th><th>Selisih</th><th>Status</th><th>Petugas</th><th>Waktu</th></tr></thead>
               <tbody>
@@ -959,7 +993,7 @@ export function PayrollCycleView({ notify = NOOP }) {
         </>}
       </>}
 
-      <div className="cycle-footnote"><FileText size={14} /><span>Seluruh data dan perhitungan berasal dari API Finova. Perubahan pada periode yang sudah disetujui atau dibayar tidak dapat dilakukan.</span></div>
+      <div className="cycle-footnote"><FileText size={14} /><span>Seluruh data dan perhitungan berasal dari API Finova. Input dan perhitungan hanya diubah pada periode draft; dokumen masih dapat dilengkapi sampai periode dibayar.</span></div>
 
       {employeeModal && <Modal
         title={employeeModal.id ? 'Ajukan perubahan karyawan' : 'Tambah karyawan'}
@@ -1016,12 +1050,13 @@ export function PayrollCycleView({ notify = NOOP }) {
         footer={<><Button variant="secondary" onClick={() => setInputModal(null)}>Batal</Button><Button type="submit" form="cycle-input-form"><Plus size={15} /> Simpan input</Button></>}
       >
         <form id="cycle-input-form" className="cycle-form" onSubmit={saveInput}>
-          <p className="cycle-form-intro">Periode {activePeriod?.period}. Absen 0–31 hari; lembur biasa dan lembur libur maksimal 80 jam.</p>
+          <p className="cycle-form-intro">Periode {activePeriod?.period}. Absen 0–{inputActiveDays} hari; lembur biasa dan libur maksimal 80 jam. Jam lembur pertama pada setiap hari lembur dikali 1,5.</p>
           <div className="cycle-form-grid">
-            <label className="cycle-field"><span>Hari absen</span><input className="input" type="number" min="0" max="31" value={inputModal.draft.absent_days} onChange={(event) => patchInput('absent_days', event.target.value)} /></label>
+            <label className="cycle-field"><span>Hari absen</span><input className="input" type="number" min="0" max={inputActiveDays} step="1" value={inputModal.draft.absent_days} onChange={(event) => patchInput('absent_days', event.target.value)} /></label>
+            <label className="cycle-field"><span>Jumlah hari lembur biasa</span><input className="input" type="number" min="1" max={inputActiveDays} step="1" value={inputModal.draft.overtime_days} onChange={(event) => patchInput('overtime_days', event.target.value)} /></label>
             <label className="cycle-field"><span>Lembur biasa (jam)</span><input className="input" type="number" min="0" max="80" value={inputModal.draft.overtime_hours} onChange={(event) => patchInput('overtime_hours', event.target.value)} /></label>
             <label className="cycle-field"><span>Lembur libur (jam)</span><input className="input" type="number" min="0" max="80" value={inputModal.draft.holiday_overtime_hours} onChange={(event) => patchInput('holiday_overtime_hours', event.target.value)} /></label>
-            <div className="cycle-field"><span>THR / Tunjangan Hari Raya (Rp)</span><input className="input" type="number" min="0" step="1000" value={inputModal.draft.thr_amount} onChange={(event) => patchInput('thr_amount', event.target.value)} /><small>Saran prorata: {money(inputModal.line.thr_suggestion || 0)} · <button type="button" className="button ghost small" onClick={() => patchInput('thr_amount', String(inputModal.line.thr_suggestion || 0))}>pakai</button></small></div>
+            <div className="cycle-field"><span>THR / Tunjangan Hari Raya (Rp)</span><input className="input" type="number" min="0" step="0.01" value={inputModal.draft.thr_amount} onChange={(event) => patchInput('thr_amount', event.target.value)} /><small>Saran prorata: {money(inputModal.line.thr_suggestion || 0)} · <button type="button" className="button ghost small" onClick={() => patchInput('thr_amount', String(inputModal.line.thr_suggestion || 0))}>pakai</button></small></div>
             <label className="cycle-field"><span>Tunjangan lain (Rp)</span><input className="input" type="number" min="0" step="1000" value={inputModal.draft.other_allowance} onChange={(event) => patchInput('other_allowance', event.target.value)} /></label>
             <label className="cycle-field"><span>Potongan lain (Rp)</span><input className="input" type="number" min="0" step="1000" value={inputModal.draft.other_deduction} onChange={(event) => patchInput('other_deduction', event.target.value)} /></label>
             <label className="cycle-field cycle-field-wide"><span>Catatan</span><textarea className="input" rows="2" value={inputModal.draft.notes} onChange={(event) => patchInput('notes', event.target.value)} /></label>
@@ -1050,21 +1085,28 @@ export function PayrollCycleView({ notify = NOOP }) {
 
       {slipModal && <Modal
         title={`Slip gaji — ${slipModal.employee.name}`}
+        className="payslip-modal"
         onClose={() => setSlipModal(null)}
         maxWidth="720px"
-        footer={<Button variant="secondary" onClick={() => setSlipModal(null)}>Tutup</Button>}
+        footer={<><Button variant="secondary" onClick={() => setSlipModal(null)}>Tutup</Button><Button onClick={() => window.print()}><Printer size={15} /> Cetak / simpan PDF</Button></>}
       >
         {(() => {
           const run = slipModal.run
           if (!run) return <CycleEmpty>Periode ini belum dihitung untuk karyawan tersebut.</CycleEmpty>
           const calc = readCalculation(run.calculation_json)
+          const wageBasis = Number(calc.wageBasis ?? (Number(calc.basic || 0) + Number(calc.fixedAllowance || 0)))
+          const proratedWage = Number(calc.proratedWage ?? wageBasis)
+          const activeDays = Number(calc.activeDays ?? calc.calendarDays ?? 0)
+          const calendarDays = Number(calc.calendarDays ?? 0)
           const employeeBpjs = Number(run.bpjs_kesehatan_employee || 0) + Number(run.jht_employee || 0) + Number(run.jp_employee || 0)
           return <>
-            <p className="cycle-form-intro">{slipModal.employee.employee_code} · {slipModal.employee.department || '—'} · {activePeriod ? periodLabel(activePeriod.period) : '—'} · Pajak {run.tax_mode}{run.tax_category ? ` kategori ${run.tax_category}` : ''}</p>
+            <p className="cycle-form-intro">{slipModal.employee.employee_code} · {slipModal.employee.department || '—'} · {activePeriod ? periodLabel(activePeriod.period) : '—'} · Pajak {run.tax_mode === 'TER' ? `TER kategori ${run.tax_category || '—'}` : 'Pasal 17 tahunan'}</p>
             <div className="cycle-breakdown">
               <div><p className="cycle-form-intro">Pendapatan</p>
                 <DetailRow label="Gaji pokok" note="Upah dasar" value={calc.basic} />
                 <DetailRow label="Tunjangan tetap" note="Komponen tetap" value={calc.fixedAllowance} />
+                <DetailRow label="Penyesuaian hari aktif" note={`${activeDays || '—'} dari ${calendarDays || '—'} hari`} value={proratedWage - wageBasis} />
+                <DetailRow label="Potongan absen" note="Dikurangkan dari upah prorata" value={-Number(calc.absenceDeduction || 0)} />
                 <DetailRow label="Uang lembur" note="Lembur biasa dan libur" value={run.overtime_pay} />
                 <DetailRow label="THR" note="Kena PPh, tidak masuk basis BPJS" value={run.thr_amount} />
                 <DetailRow label="Tunjangan lain" note="Input tambahan" value={run.other_allowance} />
