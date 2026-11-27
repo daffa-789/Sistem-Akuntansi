@@ -12,7 +12,9 @@ import {
   setStaticHandlerRef,
   type AppState
 } from './http/router'
+import { createAuthManager } from './auth'
 import { accountsRoutes } from './routes/accounts'
+import { authRoutes } from './routes/auth'
 import { payrollRoutes } from './routes/payroll'
 
 export type ServerHandle = ReturnType<typeof Bun.serve>
@@ -47,8 +49,10 @@ export function createFinovaApp(overrides: AppOverrides = {}): FinovaApp {
   database.bootstrap(config.companyId, config.companyName, config.operatorName)
 
   const state: AppState = { config, db: database, operatorId: 1 }
+  const auth = createAuthManager(database, config.companyId)
 
   const router = new Router()
+  router.setAuth(auth)
   for (const [method, pattern, handler] of [
     ['GET', '/api/health', () =>
       Response.json({
@@ -57,6 +61,7 @@ export function createFinovaApp(overrides: AppOverrides = {}): FinovaApp {
         runtime: 'bun',
         version: config.version
       })],
+    ...authRoutes(auth),
     ...accountsRoutes(state),
     ...payrollRoutes(state)
   ] as Array<[string, string, (ctx: any) => Response | Promise<Response>]>) {

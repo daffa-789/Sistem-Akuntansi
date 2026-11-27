@@ -58,9 +58,13 @@ describe('Db.bootstrap', () => {
       name: string
       role: string
     }[]
-    expect(users.length).toBe(1)
-    expect(users[0].name).toBe('Operator Uji')
-    expect(users[0].role).toBe('ADMIN')
+    expect(users.length).toBe(6)
+    expect(users.some((user) => user.role === 'ADMIN')).toBe(true)
+    expect(users.some((user) => user.role === 'SDM')).toBe(true)
+    expect(users.some((user) => user.role === 'PENGGAJIAN')).toBe(true)
+    expect(users.some((user) => user.role === 'KEUANGAN')).toBe(true)
+    expect(users.some((user) => user.role === 'AKUNTANSI')).toBe(true)
+    expect(users.some((user) => user.role === 'SDM_MANAGER')).toBe(true)
 
     // Pemanggilan kedua tidak menggandakan apa pun.
     db.bootstrap(1, 'PT Uji', 'Operator Uji')
@@ -68,7 +72,7 @@ describe('Db.bootstrap', () => {
     const accountsAgain = db.connection.query('SELECT COUNT(*) AS c FROM accounts').get() as {
       c: number
     }
-    expect(usersAgain.c).toBe(1)
+    expect(usersAgain.c).toBe(6)
     expect(accountsAgain.c).toBe(6)
   })
   it('menambahkan kolom lembur harian pada database lama tanpa menghapus data', () => {

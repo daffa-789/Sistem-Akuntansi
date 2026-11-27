@@ -6,6 +6,7 @@ import { Database } from 'bun:sqlite'
 import fs from 'node:fs'
 import path from 'node:path'
 import { SCHEMA_SQL } from './schema'
+import { DEMO_PASSWORD, DEMO_USERS, hashPassword } from './auth'
 
 export const LOGIN_DISABLED_HASH = '!!login-dinonaktifkan!!'
 
@@ -73,21 +74,32 @@ export class Db {
         [companyId, companyName]
       )
 
-      const existingUser = this.db
-        .query('SELECT id FROM users WHERE company_id = ? ORDER BY id LIMIT 1')
-        .get(companyId) as { id: number } | null
-
-      if (!existingUser) {
+      // Pengguna bawaan yang lama tidak bisa login; aktifkan kembali dengan
+      // sandi demo yang sama dengan akun-akun peran di bawah.
+      const legacyUser = this.db
+        .query('SELECT id, password_hash FROM users WHERE company_id = ? ORDER BY id LIMIT 1')
+        .get(companyId) as { id: number; password_hash: string } | null
+      if (legacyUser?.password_hash === LOGIN_DISABLED_HASH) {
         this.db.run(
-          `INSERT INTO users (company_id, name, email, password_hash, role, is_active)
-           VALUES (?, ?, 'operator@finova.local', ?, 'ADMIN', 1)`,
-          [companyId, operatorName, LOGIN_DISABLED_HASH]
+          `UPDATE users SET name = ?, password_hash = ?, role = 'ADMIN', is_active = 1 WHERE id = ?`,
+          [operatorName, hashPassword(DEMO_PASSWORD), legacyUser.id]
         )
-      } else {
-        this.db.run("UPDATE users SET name = ?, role = 'ADMIN', is_active = 1 WHERE id = ?", [
-          operatorName,
-          existingUser.id
-        ])
+      }
+
+      // Setiap peran dalam pemisahan tugas BAB V.pptx punya akun sendiri.
+      for (const demo of DEMO_USERS) {
+        const exists = this.db.query('SELECT id FROM users WHERE email = ?').get(demo.email)
+        if (!exists) {
+          this.db.run(
+            `INSERT INTO users (company_id, name, email, password_hash, role, is_active)
+             VALUES (?, ?, ?, ?, ?, 1)`,
+            [companyId, demo.name, demo.email, hashPassword(DEMO_PASSWORD), demo.role]
+          )
+        }
+        this.db.run(
+          'UPDATE users SET role = ?, is_active = 1 WHERE company_id = ? AND email = ?',
+          [demo.role, companyId, demo.email]
+        )
       }
 
       // Pastikan 12 periode berjalan untuk tahun ini.
@@ -105,12 +117,19 @@ export class Db {
   }
 
   private migrate(): void {
-    const columns = this.db.query('PRAGMA table_info(payroll_inputs)').all() as Array<{ name: string }>
-    if (!columns.some((column) => column.name === 'overtime_days')) {
-      this.db.run(
-        'ALTER TABLE payroll_inputs ADD COLUMN overtime_days INTEGER NOT NULL DEFAULT 1'
-      )
+    const addColumn = (table: string, name: string, definition: string): void => {
+      const columns = this.db.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+      if (!columns.some((column) => column.name === name)) {
+        this.db.run(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`)
+      }
     }
+    addColumn('payroll_inputs', 'overtime_days', 'INTEGER NOT NULL DEFAULT 1')
+    addColumn('payroll_inputs', 'late_minutes', 'INTEGER NOT NULL DEFAULT 0')
+    addColumn('payroll_documents', 'file_name', 'TEXT NULL')
+    addColumn('payroll_documents', 'file_original', 'TEXT NULL')
+    addColumn('payroll_documents', 'file_size', 'INTEGER NOT NULL DEFAULT 0')
+    addColumn('payroll_documents', 'mime_type', 'TEXT NULL')
+    addColumn('payroll_documents', 'uploaded_at', 'TEXT NULL')
     this.db.run('INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)')
   }
 

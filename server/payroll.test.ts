@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createFinovaApp, type FinovaApp } from './app'
+import { DEMO_PASSWORD, DEMO_USERS, SESSION_COOKIE } from './auth'
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'finova-payroll-test-'))
 const year = new Date().getFullYear()
@@ -24,13 +25,55 @@ interface PayrollOptions {
   input?: Record<string, unknown>
 }
 
-async function api(method: string, route: string, body?: unknown): Promise<ApiResult> {
+let sessionCookie = ''
+
+async function rawApi(method: string, route: string, body?: unknown): Promise<ApiResult> {
   const response = await fetch(base + route, {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers: {
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(sessionCookie ? { Cookie: sessionCookie } : {})
+    },
     body: body === undefined ? undefined : JSON.stringify(body)
   })
   return { status: response.status, payload: await response.json() }
+}
+
+/**
+ * Field peran di body test adalah "pemeran" permintaan — server mengabaikannya
+ * dan membaca peran dari sesi. Harness ini memastikan pengguna yang tepat yang
+ * login sebelum eksekusi, lalu kembali ke admin setelahnya.
+ */
+async function loginAs(role: string): Promise<void> {
+  const demo = DEMO_USERS.find((user) => user.role === role || user.email === role)
+  const email = demo?.email ?? role
+  const response = await fetch(base + '/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: DEMO_PASSWORD })
+  })
+  if (response.status !== 200) throw new Error(`Gagal login sebagai ${role}: ${await response.text()}`)
+  const cookie = response.headers.get('set-cookie') || ''
+  const token = new RegExp(`${SESSION_COOKIE}=([^;]+)`).exec(cookie)?.[1]
+  if (!token) throw new Error(`Cookie sesi tidak diterima untuk ${role}`)
+  sessionCookie = `${SESSION_COOKIE}=${token}`
+}
+
+function roleHint(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null
+  const record = body as Record<string, unknown>
+  const role = record.operator_role ?? record.requested_by_role
+  return typeof role === 'string' && role ? role : null
+}
+
+async function api(method: string, route: string, body?: unknown): Promise<ApiResult> {
+  const hint = roleHint(body)
+  if (hint) await loginAs(hint)
+  try {
+    return await rawApi(method, route, body)
+  } finally {
+    if (hint) await loginAs('ADMIN')
+  }
 }
 
 function lastDayOf(period: string): string {
@@ -164,12 +207,13 @@ function journalTotals(journalId: number): { debit: number; credit: number } {
     .get(journalId) as { debit: number; credit: number }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   databaseSequence += 1
   employeeSequence = 0
   databaseFile = path.join(scratch, `payroll-${databaseSequence}.sqlite`)
   app = createFinovaApp({ databaseFile, port: 0 })
   base = `http://127.0.0.1:${app.start()}`
+  await loginAs('ADMIN')
 })
 
 afterEach(() => {
@@ -1067,5 +1111,106 @@ describe('API siklus penggajian', () => {
       requested_by_role: 'SDM'
     })
     expect(futureChange.status).toBe(201)
+  })
+
+  it('membutuhkan sesi login dan mengambil peran dari pengguna, bukan body', async () => {
+    const saved = sessionCookie
+    sessionCookie = ''
+    expect((await rawApi('GET', '/api/payroll/employees')).status).toBe(401)
+    expect((await rawApi('GET', '/api/health')).status).toBe(200)
+    sessionCookie = saved
+
+    const wrong = await fetch(base + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'sdm@finova.local', password: 'salah' })
+    })
+    expect(wrong.status).toBe(401)
+
+    const employeeId = await createEmployee()
+    await loginAs('KEUANGAN')
+    expect((await rawApi('GET', '/api/auth/me')).payload.user.role).toBe('KEUANGAN')
+    const rejected = await rawApi('POST', '/api/payroll/change-requests', {
+      employee_id: employeeId,
+      field_name: 'position',
+      new_value: 'Supervisor',
+      reason: 'Uji peran dari sesi'
+    })
+    expectBadRequest(rejected, 'harus diajukan oleh SDM')
+    await loginAs('ADMIN')
+  })
+
+  it('mengakhiri sesi saat logout', async () => {
+    expect((await rawApi('POST', '/api/auth/logout')).status).toBe(200)
+    expect((await rawApi('GET', '/api/payroll/employees')).status).toBe(401)
+    await loginAs('ADMIN')
+    expect((await rawApi('GET', '/api/payroll/employees')).status).toBe(200)
+  })
+
+  it('menyimpan, melayani, dan menghapus berkas dokumen penggajian', async () => {
+    const periodId = await createPeriod()
+    const saved = await api('POST', `/api/payroll/periods/${periodId}/documents`, {
+      doc_type: 'PAYSLIP',
+      reference_no: 'SLIP-001',
+      doc_date: lastDayOf(junePeriod),
+      title: 'Slip gaji uji',
+      status: 'VERIFIED'
+    })
+    expect(saved.status).toBe(201)
+    const documentId = saved.payload.id
+
+    const form = new FormData()
+    form.append('file', new File(['isi slip uji'], 'slip-uji.txt', { type: 'text/plain' }))
+    const upload = await fetch(base + `/api/payroll/documents/${documentId}/file`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie },
+      body: form
+    })
+    expect(upload.status).toBe(200)
+    expect((await upload.json()).file.file_original).toBe('slip-uji.txt')
+
+    const download = await fetch(base + `/api/payroll/documents/${documentId}/file`, {
+      headers: { Cookie: sessionCookie }
+    })
+    expect(download.status).toBe(200)
+    expect(await download.text()).toBe('isi slip uji')
+
+    const documents = await api('GET', `/api/payroll/periods/${periodId}/documents`)
+    const slip = documents.payload.documents.find((item: any) => item.doc_type === 'PAYSLIP')
+    expect(slip.file_name).toMatch(/\.txt$/)
+
+    const rejectedForm = new FormData()
+    rejectedForm.append('file', new File(['x'], 'berbahaya.exe', { type: 'application/octet-stream' }))
+    const rejected = await fetch(base + `/api/payroll/documents/${documentId}/file`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie },
+      body: rejectedForm
+    })
+    expect(rejected.status).toBe(422)
+
+    expect((await api('DELETE', `/api/payroll/documents/${documentId}/file`)).status).toBe(200)
+    const after = await api('GET', `/api/payroll/periods/${periodId}/documents`)
+    expect(after.payload.documents.find((item: any) => item.doc_type === 'PAYSLIP').file_name).toBeNull()
+  })
+
+  it('mencatat keterlambatan tanpa mengubah gaji bersih', async () => {
+    const employeeId = await createEmployee()
+    const periodId = await createPeriod()
+    await putInput(periodId, employeeId)
+    await runPayroll(periodId)
+    const baseline = Number(latestRun(periodId, employeeId).net_pay)
+
+    await putInput(periodId, employeeId, { late_minutes: 45 })
+    await runPayroll(periodId)
+    const run = latestRun(periodId, employeeId)
+    expect(Number(run.net_pay)).toBe(baseline)
+    expect(calculationOf(run).lateMinutes).toBe(45)
+
+    const lines = await api('GET', `/api/payroll/periods/${periodId}/lines`)
+    expect(lines.payload.lines[0].input.late_minutes).toBe(45)
+    expectBadRequest(
+      await api('PUT', `/api/payroll/periods/${periodId}/inputs/${employeeId}`, { late_minutes: 2000 }),
+      'Keterlambatan'
+    )
   })
 })

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Banknote,
   BookOpen,
@@ -6,6 +6,7 @@ import {
   Calculator,
   CheckCircle2,
   ClipboardList,
+  Download,
   FileText,
   FolderOpen,
   Landmark,
@@ -14,6 +15,8 @@ import {
   Printer,
   RefreshCw,
   ShieldCheck,
+  Trash2,
+  Upload,
   Users,
   WalletCards,
   XCircle
@@ -171,6 +174,7 @@ function inputToDraft(input) {
     overtime_days: input?.overtime_days ?? 1,
     overtime_hours: input?.overtime_hours ?? 0,
     holiday_overtime_hours: input?.holiday_overtime_hours ?? 0,
+    late_minutes: input?.late_minutes ?? 0,
     thr_amount: input?.thr_amount ?? 0,
     other_allowance: input?.other_allowance ?? 0,
     other_deduction: input?.other_deduction ?? 0,
@@ -242,7 +246,7 @@ function JournalList({ entries, limit }) {
 // Fungsi default harus stabil: efek periodik bergantung pada prop ini.
 const NOOP = () => {}
 
-export function PayrollCycleView({ notify = NOOP }) {
+export function PayrollCycleView({ notify = NOOP, user = null }) {
   const [view, setView] = useState('summary')
   const [employees, setEmployees] = useState([])
   const [company, setCompany] = useState(null)
@@ -267,9 +271,11 @@ export function PayrollCycleView({ notify = NOOP }) {
   const [inputModal, setInputModal] = useState(null)
   const [slipModal, setSlipModal] = useState(null)
   const [documentModal, setDocumentModal] = useState(null)
-  const [verificationDraft, setVerificationDraft] = useState({ verified_count: '', operator_role: 'SDM', note: '' })
-  const [reconciliationDraft, setReconciliationDraft] = useState({ bank_total: '', operator_role: 'AKUNTANSI', note: '' })
+  const [verificationDraft, setVerificationDraft] = useState({ verified_count: '', note: '' })
+  const [reconciliationDraft, setReconciliationDraft] = useState({ bank_total: '', note: '' })
   const [query, setQuery] = useState('')
+  const fileInputRef = useRef(null)
+  const uploadTargetRef = useRef(null)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -349,12 +355,10 @@ export function PayrollCycleView({ notify = NOOP }) {
       const reconciliation = checks.find((check) => check.kind === 'RECONCILIATION')
       setVerificationDraft({
         verified_count: verification ? String(verification.actual_value) : '',
-        operator_role: verification?.operator_role || 'SDM',
         note: verification?.note || ''
       })
       setReconciliationDraft({
         bank_total: reconciliation ? String(reconciliation.actual_value) : '',
-        operator_role: reconciliation?.operator_role || 'AKUNTANSI',
         note: reconciliation?.note || ''
       })
     })
@@ -477,8 +481,7 @@ export function PayrollCycleView({ notify = NOOP }) {
               employee_id: draft.id,
               field_name: field,
               new_value: payload[field],
-              reason,
-              requested_by_role: 'SDM'
+              reason
             }
           })
         }
@@ -502,7 +505,6 @@ export function PayrollCycleView({ notify = NOOP }) {
         method: 'POST',
         body: {
           decision,
-          operator_role: 'ADMIN',
           note: decision === 'APPROVED' ? 'Disetujui sesuai ketentuan perubahan data karyawan.' : 'Ditolak oleh penanggung jawab.'
         }
       })
@@ -595,6 +597,7 @@ export function PayrollCycleView({ notify = NOOP }) {
           overtime_days: Number(draft.overtime_days || 1),
           overtime_hours: Number(draft.overtime_hours || 0),
           holiday_overtime_hours: Number(draft.holiday_overtime_hours || 0),
+          late_minutes: Number(draft.late_minutes || 0),
           thr_amount: Number(draft.thr_amount || 0),
           other_allowance: Number(draft.other_allowance || 0),
           other_deduction: Number(draft.other_deduction || 0),
@@ -659,13 +662,51 @@ export function PayrollCycleView({ notify = NOOP }) {
     }
   }
 
+  function pickDocumentFile(document) {
+    uploadTargetRef.current = document
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+      fileInputRef.current.click()
+    }
+  }
+
+  async function onDocumentFileChange(event) {
+    const file = event.target.files?.[0]
+    const target = uploadTargetRef.current
+    uploadTargetRef.current = null
+    if (!file || !target) return
+    setBusy(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      await request(`/api/payroll/documents/${target.id}/file`, { method: 'POST', body: form })
+      notify(`Berkas ${target.label} berhasil disimpan.`)
+      refreshPeriodData()
+    } catch (err) {
+      notify(err.message || 'Gagal mengunggah berkas dokumen.', true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeDocumentFile(document) {
+    if (!window.confirm(`Hapus berkas ${document.label} dari penyimpanan?`)) return
+    try {
+      await request(`/api/payroll/documents/${document.id}/file`, { method: 'DELETE' })
+      notify('Berkas dokumen dihapus.')
+      refreshPeriodData()
+    } catch (err) {
+      notify(err.message || 'Gagal menghapus berkas dokumen.', true)
+    }
+  }
+
   async function saveControl(kind, draft) {
     if (!activePeriod) return
     setBusy(true)
     try {
       const body = kind === 'PAYEE_VERIFICATION'
-        ? { kind, verified_count: Number(draft.verified_count || 0), operator_role: draft.operator_role, note: draft.note }
-        : { kind, bank_total: Number(draft.bank_total || 0), operator_role: draft.operator_role, note: draft.note }
+        ? { kind, verified_count: Number(draft.verified_count || 0), note: draft.note }
+        : { kind, bank_total: Number(draft.bank_total || 0), note: draft.note }
       const result = await request(`/api/payroll/periods/${activePeriod.id}/controls`, { method: 'POST', body })
       if (result.status === 'OK') {
         notify(kind === 'PAYEE_VERIFICATION' ? 'Daftar penerima gaji terverifikasi.' : 'Rekonsiliasi gaji dan bank sesuai.')
@@ -840,7 +881,7 @@ export function PayrollCycleView({ notify = NOOP }) {
           </div>
           {staleCount > 0 && <div className="cycle-form-hint" style={{ color: '#8a3a3a' }}>{staleCount} perhitungan sudah tidak sesuai dengan data terbaru. Jalankan Hitung ulang sebelum menyetujui periode.</div>}
           <div className="cycle-table-wrap"><table className="cycle-table">
-            <thead><tr><th>Karyawan</th><th>Status pajak</th><th className="num">Gaji kotor</th><th className="num">BPJS karyawan</th><th className="num">PPh 21</th><th className="num">Gaji bersih</th><th>Status hitung</th><th /></tr></thead>
+            <thead><tr><th>Karyawan</th><th>Status pajak</th><th className="num">Telat</th><th className="num">Gaji kotor</th><th className="num">BPJS karyawan</th><th className="num">PPh 21</th><th className="num">Gaji bersih</th><th>Status hitung</th><th /></tr></thead>
             <tbody>
               {lines.map((line) => {
                 const run = line.run
@@ -849,6 +890,7 @@ export function PayrollCycleView({ notify = NOOP }) {
                   <tr key={line.employee.id}>
                     <td className="cycle-party"><strong>{line.employee.name}</strong><small>{line.employee.employee_code} · {line.employee.department || '—'}</small></td>
                     <td>{run ? (run.tax_mode === 'TER' ? `TER · ${run.tax_category || '—'}` : 'Pasal 17 · tahunan') : '—'}</td>
+                    <td className="num">{line.input ? `${Number(line.input.late_minutes || 0)} mnt` : '—'}</td>
                     <td className="num">{run ? money(run.gross_cash) : '—'}</td>
                     <td className="num">{run ? money(employeeBpjs) : '—'}</td>
                     <td className="num">{run ? money(run.pph21) : '—'}</td>
@@ -861,7 +903,7 @@ export function PayrollCycleView({ notify = NOOP }) {
                   </tr>
                 )
               })}
-              {!lines.length && <tr><td className="cycle-empty" colSpan={8}>Belum ada karyawan aktif untuk periode ini.</td></tr>}
+              {!lines.length && <tr><td className="cycle-empty" colSpan={9}>Belum ada karyawan aktif untuk periode ini.</td></tr>}
             </tbody>
           </table></div>
         </section>}
@@ -873,7 +915,7 @@ export function PayrollCycleView({ notify = NOOP }) {
             <div><h2>Dokumen periode {periodLabel(activePeriod.period)}</h2><p>Delapan dokumen siklus penggajian sesuai slide 28 BAB V.pptx. {verifiedDocuments} dari {documents.length || 8} sudah terverifikasi.</p></div>
           </div>
           <div className="cycle-table-wrap"><table className="cycle-table">
-            <thead><tr><th>No</th><th>Dokumen</th><th>Nomor referensi</th><th>Tanggal</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>No</th><th>Dokumen</th><th>Nomor referensi</th><th>Tanggal</th><th>Berkas</th><th>Status</th><th /></tr></thead>
             <tbody>
               {documents.map((document) => (
                 <tr key={document.doc_type}>
@@ -881,14 +923,30 @@ export function PayrollCycleView({ notify = NOOP }) {
                   <td className="cycle-party"><strong>{document.label}</strong><small>{document.description}</small></td>
                   <td>{document.reference_no || '—'}<small>{document.title || ''}</small></td>
                   <td>{dateText(document.doc_date)}</td>
+                  <td>
+                    {document.file_name ? <>
+                      <a
+                        className="cycle-file-link"
+                        href={`/api/payroll/documents/${document.id}/file?inline=1`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={document.file_original || 'Buka berkas'}
+                      >
+                        <Download size={13} /> {String(document.file_original || 'Berkas').slice(0, 28)}
+                      </a>
+                      <small>{document.file_size ? `${Math.ceil(Number(document.file_size) / 1024)} KB` : ''}</small>
+                    </> : <span className="cycle-file-empty">Belum ada</span>}
+                  </td>
                   <td>{document.status === 'VERIFIED' ? <CycleStatus status="complete" label="Terverifikasi" /> : <CycleStatus status="planned" label={document.id ? 'Draft' : 'Belum ada'} />}</td>
-                  <td className="cycle-action-cell">
+                  <td className="cycle-action-cell cycle-doc-actions">
                     <Button small variant="ghost" disabled={activePeriod.status === 'PAID'} onClick={() => openDocumentModal(document)}><Pencil size={13} /> Isi</Button>
-                    {document.id && <Button small variant="secondary" disabled={activePeriod.status === 'PAID'} onClick={() => deleteDocument(document.id)}>Hapus</Button>}
+                    {document.id && <Button small variant="secondary" disabled={activePeriod.status === 'PAID'} onClick={() => pickDocumentFile(document)}><Upload size={13} /> Berkas</Button>}
+                    {document.file_name && <Button small variant="ghost" disabled={activePeriod.status === 'PAID'} onClick={() => removeDocumentFile(document)} title="Hapus berkas"><Trash2 size={13} /></Button>}
+                    {document.id && <Button small variant="ghost" disabled={activePeriod.status === 'PAID'} onClick={() => deleteDocument(document.id)}>Hapus</Button>}
                   </td>
                 </tr>
               ))}
-              {!documents.length && <tr><td className="cycle-empty" colSpan={6}>Dokumen tidak dapat dimuat dari server.</td></tr>}
+              {!documents.length && <tr><td className="cycle-empty" colSpan={7}>Dokumen tidak dapat dimuat dari server.</td></tr>}
             </tbody>
           </table></div>
         </section>}
@@ -940,7 +998,7 @@ export function PayrollCycleView({ notify = NOOP }) {
                 <div className="cycle-form-grid">
                   <label className="cycle-field"><span>Jumlah penerima pada daftar gaji</span><input className="input" value={controlSuggested.payeeCount} readOnly disabled={!canControl} /></label>
                   <label className="cycle-field"><span>Jumlah penerima terverifikasi</span><input className="input" type="number" min="0" disabled={!canControl || busy} value={verificationDraft.verified_count} onChange={(event) => setVerificationDraft({ ...verificationDraft, verified_count: event.target.value })} /></label>
-                  <label className="cycle-field"><span>Peran petugas</span><select className="input" disabled={!canControl || busy} value={verificationDraft.operator_role} onChange={(event) => setVerificationDraft({ ...verificationDraft, operator_role: event.target.value })}><option>SDM</option><option>PENGGAJIAN</option></select></label>
+                  <div className="cycle-field"><span>Petugas (dari sesi login)</span><input className="input" value={`${user?.name || '—'} · ${user?.role || '—'}`} readOnly disabled /></div>
                   <label className="cycle-field cycle-field-wide"><span>Catatan</span><input className="input" disabled={!canControl || busy} value={verificationDraft.note} onChange={(event) => setVerificationDraft({ ...verificationDraft, note: event.target.value })} placeholder="Nomor daftar hadir / berita acara verifikasi" /></label>
                 </div>
                 <Button type="submit" small disabled={!canControl || busy} style={{ marginTop: 10 }}>Simpan verifikasi</Button>
@@ -963,7 +1021,7 @@ export function PayrollCycleView({ notify = NOOP }) {
             <form className="cycle-form" onSubmit={(event) => { event.preventDefault(); saveControl('RECONCILIATION', reconciliationDraft) }}>
               <div className="cycle-form-grid">
                 <label className="cycle-field"><span>Saldo/rekap transfer bank (Rp)</span><input className="input" type="number" min="0" step="0.01" disabled={!canControl || busy} value={reconciliationDraft.bank_total} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, bank_total: event.target.value })} /></label>
-                <label className="cycle-field"><span>Peran petugas</span><select className="input" disabled={!canControl || busy} value={reconciliationDraft.operator_role} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, operator_role: event.target.value })}><option>AKUNTANSI</option><option>KEUANGAN</option></select></label>
+                <div className="cycle-field"><span>Petugas (dari sesi login)</span><input className="input" value={`${user?.name || '—'} · ${user?.role || '—'}`} readOnly disabled /></div>
                 <label className="cycle-field cycle-field-wide"><span>Catatan rekonsiliasi</span><input className="input" disabled={!canControl || busy} value={reconciliationDraft.note} onChange={(event) => setReconciliationDraft({ ...reconciliationDraft, note: event.target.value })} placeholder="Nomor bukti transfer / tanggal rekonsiliasi" /></label>
               </div>
               <Button type="submit" small disabled={!canControl || busy} style={{ marginTop: 10 }}>Simpan rekonsiliasi</Button>
@@ -993,6 +1051,14 @@ export function PayrollCycleView({ notify = NOOP }) {
         </>}
       </>}
 
+      <input
+        ref={fileInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt"
+        onChange={onDocumentFileChange}
+        aria-label="Unggah berkas dokumen"
+      />
       <div className="cycle-footnote"><FileText size={14} /><span>Seluruh data dan perhitungan berasal dari API Finova. Input dan perhitungan hanya diubah pada periode draft; dokumen masih dapat dilengkapi sampai periode dibayar.</span></div>
 
       {employeeModal && <Modal
@@ -1050,12 +1116,13 @@ export function PayrollCycleView({ notify = NOOP }) {
         footer={<><Button variant="secondary" onClick={() => setInputModal(null)}>Batal</Button><Button type="submit" form="cycle-input-form"><Plus size={15} /> Simpan input</Button></>}
       >
         <form id="cycle-input-form" className="cycle-form" onSubmit={saveInput}>
-          <p className="cycle-form-intro">Periode {activePeriod?.period}. Absen 0–{inputActiveDays} hari; lembur biasa dan libur maksimal 80 jam. Jam lembur pertama pada setiap hari lembur dikali 1,5.</p>
+          <p className="cycle-form-intro">Periode {activePeriod?.period}. Absen 0–{inputActiveDays} hari; lembur biasa dan libur maksimal 80 jam; keterlambatan 0–1440 menit. Jam lembur pertama pada setiap hari lembur dikali 1,5.</p>
           <div className="cycle-form-grid">
             <label className="cycle-field"><span>Hari absen</span><input className="input" type="number" min="0" max={inputActiveDays} step="1" value={inputModal.draft.absent_days} onChange={(event) => patchInput('absent_days', event.target.value)} /></label>
             <label className="cycle-field"><span>Jumlah hari lembur biasa</span><input className="input" type="number" min="1" max={inputActiveDays} step="1" value={inputModal.draft.overtime_days} onChange={(event) => patchInput('overtime_days', event.target.value)} /></label>
             <label className="cycle-field"><span>Lembur biasa (jam)</span><input className="input" type="number" min="0" max="80" value={inputModal.draft.overtime_hours} onChange={(event) => patchInput('overtime_hours', event.target.value)} /></label>
             <label className="cycle-field"><span>Lembur libur (jam)</span><input className="input" type="number" min="0" max="80" value={inputModal.draft.holiday_overtime_hours} onChange={(event) => patchInput('holiday_overtime_hours', event.target.value)} /></label>
+            <label className="cycle-field"><span>Keterlambatan (menit)</span><input className="input" type="number" min="0" max="1440" step="1" value={inputModal.draft.late_minutes} onChange={(event) => patchInput('late_minutes', event.target.value)} /><small>Dicatat sebagai data waktu kerja; tidak memotong gaji otomatis.</small></label>
             <div className="cycle-field"><span>THR / Tunjangan Hari Raya (Rp)</span><input className="input" type="number" min="0" step="0.01" value={inputModal.draft.thr_amount} onChange={(event) => patchInput('thr_amount', event.target.value)} /><small>Saran prorata: {money(inputModal.line.thr_suggestion || 0)} · <button type="button" className="button ghost small" onClick={() => patchInput('thr_amount', String(inputModal.line.thr_suggestion || 0))}>pakai</button></small></div>
             <label className="cycle-field"><span>Tunjangan lain (Rp)</span><input className="input" type="number" min="0" step="1000" value={inputModal.draft.other_allowance} onChange={(event) => patchInput('other_allowance', event.target.value)} /></label>
             <label className="cycle-field"><span>Potongan lain (Rp)</span><input className="input" type="number" min="0" step="1000" value={inputModal.draft.other_deduction} onChange={(event) => patchInput('other_deduction', event.target.value)} /></label>
@@ -1101,6 +1168,7 @@ export function PayrollCycleView({ notify = NOOP }) {
           const employeeBpjs = Number(run.bpjs_kesehatan_employee || 0) + Number(run.jht_employee || 0) + Number(run.jp_employee || 0)
           return <>
             <p className="cycle-form-intro">{slipModal.employee.employee_code} · {slipModal.employee.department || '—'} · {activePeriod ? periodLabel(activePeriod.period) : '—'} · Pajak {run.tax_mode === 'TER' ? `TER kategori ${run.tax_category || '—'}` : 'Pasal 17 tahunan'}</p>
+            <p className="cycle-form-hint">Keterlambatan tercatat: {Number(calc.lateMinutes ?? slipModal.input?.late_minutes ?? 0)} menit (data waktu kerja, bukan potongan otomatis).</p>
             <div className="cycle-breakdown">
               <div><p className="cycle-form-intro">Pendapatan</p>
                 <DetailRow label="Gaji pokok" note="Upah dasar" value={calc.basic} />

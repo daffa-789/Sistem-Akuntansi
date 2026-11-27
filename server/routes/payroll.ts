@@ -2,6 +2,9 @@
 //
 // Alur: karyawan -> periode -> input kehadiran/lembur -> hitung -> setujui
 // (jurnal akrual) -> bayar (jurnal kas). Semua perubahan dicatat di audit_logs.
+import fs from 'node:fs'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { AppError } from '../errors'
 import { assertBalanced, roundMoney, type AmountedLine } from '../domain'
 import {
@@ -16,13 +19,26 @@ import {
   type TaxMode
 } from '../payroll-domain'
 import { localTimestamp } from '../lib/format'
-import { intParam, readJson, strField, type AppState, type Ctx } from '../http/router'
+import { dataDirFor, intParam, readJson, strField, type AppState, type Ctx } from '../http/router'
 
 type AnyRow = Record<string, any>
 type Handler = (ctx: Ctx) => Response | Promise<Response>
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+const DOCUMENT_MIME: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.csv': 'text/csv',
+  '.txt': 'text/plain'
+}
 
 function isValidDate(value: string): boolean {
   if (!DATE_RE.test(value)) return false
@@ -98,10 +114,15 @@ function lastDayOf(period: string): string {
 export function payrollRoutes(state: AppState): Array<[string, string, Handler]> {
   const db = state.db.connection
   const companyId = state.config.companyId
-  const operatorId = state.operatorId
 
-  function audit(entityType: string, entityId: number | null, action: string, details: unknown): void {
-    state.db.audit(companyId, operatorId, entityType, entityId, action, details)
+  /** Peran dan identitas berasal dari sesi login, bukan dari body request. */
+  function actorOf(ctx: Ctx) {
+    if (!ctx.user) throw new AppError(401, 'Silakan masuk terlebih dahulu.')
+    return ctx.user
+  }
+
+  function audit(ctx: Ctx, entityType: string, entityId: number | null, action: string, details: unknown): void {
+    state.db.audit(companyId, actorOf(ctx).id, entityType, entityId, action, details)
   }
 
   function accountId(code: string): number {
@@ -110,6 +131,45 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       .get(companyId, code) as { id: number } | null
     if (!row) throw AppError.badRequest(`Akun ${code} belum tersedia dalam bagan akun.`)
     return row.id
+  }
+
+  function documentOf(id: number): AnyRow {
+    const row = db
+      .query('SELECT * FROM payroll_documents WHERE id = ? AND company_id = ?')
+      .get(id, companyId) as AnyRow | null
+    if (!row) throw AppError.notFound('Dokumen tidak ditemukan.')
+    return row
+  }
+
+  function documentDir(periodId: number): string {
+    return path.join(dataDirFor(state), 'payroll-files', String(companyId), String(periodId))
+  }
+
+  function storedDocumentPath(row: AnyRow): string {
+    const name = String(row.file_name || '')
+    if (!/^[a-f0-9-]{36}\.[a-z0-9]+$/.test(name)) {
+      throw AppError.badRequest('Nama berkas dokumen tidak valid.')
+    }
+    return path.join(documentDir(Number(row.period_id)), name)
+  }
+
+  function removeStoredFile(row: AnyRow): void {
+    if (!row.file_name) return
+    try {
+      fs.unlinkSync(storedDocumentPath(row))
+    } catch {
+      /* berkas sudah tidak ada */
+    }
+  }
+
+  function fileInfo(row: AnyRow): Record<string, unknown> {
+    return {
+      file_name: row.file_name || null,
+      file_original: row.file_original || null,
+      file_size: Number(row.file_size || 0),
+      mime_type: row.mime_type || null,
+      uploaded_at: row.uploaded_at || null
+    }
   }
 
   function nextVoucher(period: string): string {
@@ -128,6 +188,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
   }
 
   function postJournal(
+    ctx: Ctx,
     period: string,
     entryDate: string,
     description: string,
@@ -148,7 +209,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
     const info = db.run(
       `INSERT INTO journal_entries (company_id, period_id, voucher_no, entry_date, description, source, status, created_by, posted_by, posted_at)
        VALUES (?, ?, ?, ?, ?, 'PAYROLL', 'POSTED', ?, ?, ?)`,
-      [companyId, accountingPeriod.id, voucherNo, entryDate, description, operatorId, operatorId, localTimestamp()]
+      [companyId, accountingPeriod.id, voucherNo, entryDate, description, actorOf(ctx).id, actorOf(ctx).id, localTimestamp()]
     )
     const entryId = Number(info.lastInsertRowid)
     balanced.forEach((line, index) => {
@@ -157,7 +218,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
         [entryId, line.account_id, index + 1, line.memo, line.debit, line.credit]
       )
     })
-    audit('JOURNAL_ENTRY', entryId, 'POSTED', { source: 'PAYROLL', voucherNo })
+    audit(ctx, 'JOURNAL_ENTRY', entryId, 'POSTED', { source: 'PAYROLL', voucherNo })
     return entryId
   }
 
@@ -320,6 +381,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       overtimeHours: Number(input.overtime_hours ?? 0),
       overtimeDays: Number(input.overtime_days ?? 1),
       holidayOvertimeHours: Number(input.holiday_overtime_hours ?? 0),
+      lateMinutes: Number(input.late_minutes ?? 0),
       thrAmount: Number(input.thr_amount ?? 0),
       otherAllowance: Number(input.other_allowance ?? 0),
       otherDeduction: Number(input.other_deduction ?? 0),
@@ -348,6 +410,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
         overtimeHours: periodInput.overtimeHours,
         overtimeDays: periodInput.overtimeDays,
         holidayOvertimeHours: periodInput.holidayOvertimeHours,
+        lateMinutes: periodInput.lateMinutes,
         thrAmount: periodInput.thrAmount,
         otherAllowance: periodInput.otherAllowance,
         otherDeduction: periodInput.otherDeduction
@@ -517,7 +580,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
         ]
       )
       const id = Number(info.lastInsertRowid)
-      audit('PAYROLL_EMPLOYEE', id, 'CREATED', { code: strField(body, 'employee_code') })
+      audit(ctx, 'PAYROLL_EMPLOYEE', id, 'CREATED', { code: strField(body, 'employee_code') })
       return Response.json({ id }, { status: 201 })
     }],
 
@@ -573,8 +636,10 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       }
       validateEmployee(candidate, true)
       assertChangeNotLocked(employeeId, fieldName)
-      const role = strField(body, 'requested_by_role') || 'SDM'
-      if (role !== 'SDM') throw AppError.badRequest('Permintaan perubahan data karyawan harus diajukan oleh SDM.')
+      const role = actorOf(ctx).role
+      if (role !== 'SDM' && role !== 'ADMIN') {
+        throw AppError.badRequest('Permintaan perubahan data karyawan harus diajukan oleh SDM.')
+      }
       const duplicate = db
         .query(
           `SELECT id FROM payroll_change_requests
@@ -589,7 +654,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
         [companyId, employeeId, fieldName, String(employee[fieldName] ?? ''), String(value ?? ''), reason, role]
       )
       const id = Number(info.lastInsertRowid)
-      audit('PAYROLL_CHANGE_REQUEST', id, 'REQUESTED', { employeeId, fieldName, role })
+      audit(ctx, 'PAYROLL_CHANGE_REQUEST', id, 'REQUESTED', { employeeId, fieldName, role })
       return Response.json({ id }, { status: 201 })
     }],
 
@@ -601,7 +666,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       if (!row) throw AppError.notFound('Permintaan perubahan tidak ditemukan.')
       if (row.status !== 'PENDING') throw AppError.badRequest('Permintaan perubahan sudah diputuskan.')
       const body = await readJson(ctx.req)
-      const operatorRole = strField(body, 'operator_role') || 'ADMIN'
+      const operatorRole = actorOf(ctx).role
       if (!['ADMIN', 'AKUNTANSI', 'SDM_MANAGER'].includes(operatorRole)) {
         throw AppError.badRequest('Peran penyetuju tidak berwenang memutuskan perubahan karyawan.')
       }
@@ -631,21 +696,21 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
               [companyId, companyId]
             )
           }
-          audit('PAYROLL_EMPLOYEE', Number(row.employee_id), 'UPDATED', { via: 'CHANGE_REQUEST', field, value })
+          audit(ctx, 'PAYROLL_EMPLOYEE', Number(row.employee_id), 'UPDATED', { via: 'CHANGE_REQUEST', field, value })
           db.run(
             `UPDATE payroll_change_requests SET status = ?, decided_by = ?, decided_at = ?, decision_note = ?
              WHERE id = ? AND company_id = ?`,
-            [decision, operatorId, localTimestamp(), note || null, id, companyId]
+            [decision, actorOf(ctx).id, localTimestamp(), note || null, id, companyId]
           )
-          audit('PAYROLL_CHANGE_REQUEST', id, decision, { note, operatorRole })
+          audit(ctx, 'PAYROLL_CHANGE_REQUEST', id, decision, { note, operatorRole })
         })
       } else {
         db.run(
           `UPDATE payroll_change_requests SET status = ?, decided_by = ?, decided_at = ?, decision_note = ?
            WHERE id = ? AND company_id = ?`,
-          [decision, operatorId, localTimestamp(), note || null, id, companyId]
+          [decision, actorOf(ctx).id, localTimestamp(), note || null, id, companyId]
         )
-        audit('PAYROLL_CHANGE_REQUEST', id, decision, { note, operatorRole })
+        audit(ctx, 'PAYROLL_CHANGE_REQUEST', id, decision, { note, operatorRole })
       }
       return Response.json({ ok: true, status: decision })
     }],
@@ -670,7 +735,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       const row = db
         .query('SELECT id FROM payroll_periods WHERE company_id = ? AND period = ?')
         .get(companyId, period) as { id: number }
-      audit('PAYROLL_PERIOD', row.id, 'CREATED', { period })
+      audit(ctx, 'PAYROLL_PERIOD', row.id, 'CREATED', { period })
       return Response.json({ id: row.id }, { status: 201 })
     }],
 
@@ -726,8 +791,10 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
           description,
           order: index + 1,
           ...(byType.get(type) || {
-            id: null, reference_no: '', doc_date: null, title: '', status: 'DRAFT', note: null
-          })
+            id: null, reference_no: '', doc_date: null, title: '', status: 'DRAFT', note: null,
+            file_name: null, file_original: null, file_size: 0, mime_type: null, uploaded_at: null
+          }),
+          ...fileInfo(byType.get(type) || {})
         }))
       })
     }],
@@ -756,20 +823,98 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
           strField(body, 'title') || known[1], status, strField(body, 'note') || null
         ]
       )
-      audit('PAYROLL_DOCUMENT', period.id, 'UPSERTED', { period: period.period, docType, status })
+      audit(ctx, 'PAYROLL_DOCUMENT', period.id, 'UPSERTED', { period: period.period, docType, status })
       return Response.json({ id: Number(info.lastInsertRowid) }, { status: 201 })
     }],
 
     ['DELETE', '/api/payroll/documents/:id', (ctx) => {
       const id = intParam(ctx, 'id')
-      const row = db
-        .query('SELECT * FROM payroll_documents WHERE id = ? AND company_id = ?')
-        .get(id, companyId) as AnyRow | null
-      if (!row) throw AppError.notFound('Dokumen tidak ditemukan.')
+      const row = documentOf(id)
       const period = periodOf(Number(row.period_id))
       if (period.status === 'PAID') throw AppError.badRequest('Periode sudah dibayar; dokumen tidak dapat dihapus.')
+      removeStoredFile(row)
       db.run('DELETE FROM payroll_documents WHERE id = ? AND company_id = ?', [id, companyId])
-      audit('PAYROLL_DOCUMENT', id, 'DELETED', { docType: row.doc_type })
+      audit(ctx, 'PAYROLL_DOCUMENT', id, 'DELETED', { docType: row.doc_type })
+      return Response.json({ ok: true })
+    }],
+
+    ['POST', '/api/payroll/documents/:id/file', async (ctx) => {
+      const id = intParam(ctx, 'id')
+      const row = documentOf(id)
+      const period = periodOf(Number(row.period_id))
+      if (period.status === 'PAID') throw AppError.badRequest('Periode sudah dibayar; dokumen tidak dapat diubah.')
+
+      const form = await ctx.req.formData().catch(() => null)
+      const file = form?.get('file')
+      if (!file || typeof file === 'string' || typeof file.arrayBuffer !== 'function') {
+        throw AppError.badRequest('Pilih berkas dokumen terlebih dahulu.')
+      }
+      if (file.size === 0) throw AppError.badRequest('Berkas dokumen kosong.')
+      if (file.size > MAX_DOCUMENT_BYTES) {
+        throw AppError.badRequest('Ukuran berkas maksimal 10 MB.')
+      }
+      const original = path.basename(String(file.name || 'dokumen')).replace(/[\r\n"]/g, '')
+      const ext = path.extname(original).toLowerCase()
+      const mime = DOCUMENT_MIME[ext]
+      if (!mime) {
+        throw AppError.badRequest('Jenis berkas tidak didukung. Gunakan PDF, gambar, Word, Excel, CSV, atau TXT.')
+      }
+
+      const stored = `${randomUUID()}${ext}`
+      const dir = documentDir(Number(row.period_id))
+      fs.mkdirSync(dir, { recursive: true })
+      const bytes = Buffer.from(await file.arrayBuffer())
+      fs.writeFileSync(path.join(dir, stored), bytes)
+      try {
+        db.run(
+          `UPDATE payroll_documents SET file_name = ?, file_original = ?, file_size = ?,
+           mime_type = ?, uploaded_at = ?, updated_at = datetime('now','localtime')
+           WHERE id = ? AND company_id = ?`,
+          [stored, original || 'dokumen', bytes.length, mime, localTimestamp(), id, companyId]
+        )
+      } catch (err) {
+        fs.rmSync(path.join(dir, stored), { force: true })
+        throw err
+      }
+      // Berkas lama dihapus setelah metadata baru tersimpan.
+      removeStoredFile(row)
+      audit(ctx, 'PAYROLL_DOCUMENT', id, 'FILE_UPLOADED', {
+        period: period.period, docType: row.doc_type, bytes: bytes.length
+      })
+      return Response.json({ ok: true, file: fileInfo(documentOf(id)) })
+    }],
+
+    ['GET', '/api/payroll/documents/:id/file', (ctx) => {
+      const row = documentOf(intParam(ctx, 'id'))
+      if (!row.file_name) throw AppError.notFound('Dokumen ini belum memiliki berkas terunggah.')
+      const target = storedDocumentPath(row)
+      if (!fs.existsSync(target)) throw AppError.notFound('Berkas dokumen tidak ditemukan pada penyimpanan.')
+      const mime = String(row.mime_type || 'application/octet-stream')
+      const inline = ctx.query.get('inline') === '1' && /^(application\/pdf|image\/)/.test(mime)
+      const safeName = String(row.file_original || 'dokumen').replace(/[\r\n"]/g, '')
+      const disposition = `${inline ? 'inline' : 'attachment'}; filename="document"; filename*=UTF-8''${encodeURIComponent(safeName)}`
+      return new Response(Bun.file(target), {
+        headers: {
+          'Content-Type': mime,
+          'Content-Disposition': disposition,
+          'Cache-Control': 'no-store'
+        }
+      })
+    }],
+
+    ['DELETE', '/api/payroll/documents/:id/file', (ctx) => {
+      const id = intParam(ctx, 'id')
+      const row = documentOf(id)
+      const period = periodOf(Number(row.period_id))
+      if (period.status === 'PAID') throw AppError.badRequest('Periode sudah dibayar; dokumen tidak dapat diubah.')
+      removeStoredFile(row)
+      db.run(
+        `UPDATE payroll_documents SET file_name = NULL, file_original = NULL, file_size = 0,
+         mime_type = NULL, uploaded_at = NULL, updated_at = datetime('now','localtime')
+         WHERE id = ? AND company_id = ?`,
+        [id, companyId]
+      )
+      audit(ctx, 'PAYROLL_DOCUMENT', id, 'FILE_REMOVED', { period: period.period, docType: row.doc_type })
       return Response.json({ ok: true })
     }],
 
@@ -804,7 +949,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       const totals = periodTotals(period.id)
       const employees = activeEmployeesOf(period)
       const note = strField(body, 'note')
-      const role = strField(body, 'operator_role') || 'AKUNTANSI'
+      const role = actorOf(ctx).role
       if (kind === 'PAYEE_VERIFICATION' && !['SDM', 'PENGGAJIAN'].includes(role)) {
         throw AppError.badRequest('Verifikasi penerima harus dilakukan SDM atau bagian penggajian.')
       }
@@ -839,10 +984,10 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
            checked_at = excluded.checked_at, note = excluded.note`,
         [
           companyId, period.id, kind, expected, actual, difference, status,
-          operatorId, role, localTimestamp(), note || null
+          actorOf(ctx).id, role, localTimestamp(), note || null
         ]
       )
-      audit('PAYROLL_CONTROL', period.id, kind, { status, expected, actual, difference, role })
+      audit(ctx, 'PAYROLL_CONTROL', period.id, kind, { status, expected, actual, difference, role })
       return Response.json({ ok: true, status, expected, actual, difference })
     }],
 
@@ -859,6 +1004,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       const overtimeDays = numField(body, 'overtime_days', 1)
       const holiday = numField(body, 'holiday_overtime_hours')
       const absent = numField(body, 'absent_days')
+      const lateMinutes = numField(body, 'late_minutes')
       const thr = numField(body, 'thr_amount')
       const allowance = numField(body, 'other_allowance')
       const deduction = numField(body, 'other_deduction')
@@ -872,29 +1018,33 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       if (thr < 0 || allowance < 0 || deduction < 0) {
         throw AppError.badRequest('THR, tunjangan lain, dan potongan lain tidak boleh negatif.')
       }
+      if (!Number.isInteger(lateMinutes) || lateMinutes < 0 || lateMinutes > 1440) {
+        throw AppError.badRequest('Keterlambatan harus bilangan bulat 0 sampai 1440 menit per bulan.')
+      }
       state.db.withTransaction(() => {
         db.run(
           `INSERT INTO payroll_inputs
             (company_id, period_id, employee_id, absent_days, overtime_hours, overtime_days, holiday_overtime_hours,
-             thr_amount, other_allowance, other_deduction, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+             late_minutes, thr_amount, other_allowance, other_deduction, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
            ON CONFLICT(period_id, employee_id) DO UPDATE SET
              absent_days = excluded.absent_days,
              overtime_hours = excluded.overtime_hours,
              overtime_days = excluded.overtime_days,
              holiday_overtime_hours = excluded.holiday_overtime_hours,
+             late_minutes = excluded.late_minutes,
              thr_amount = excluded.thr_amount,
              other_allowance = excluded.other_allowance,
              other_deduction = excluded.other_deduction,
              notes = excluded.notes,
              updated_at = datetime('now','localtime')`,
           [
-            companyId, periodId, employeeId, absent, overtime, overtimeDays, holiday,
+            companyId, periodId, employeeId, absent, overtime, overtimeDays, holiday, lateMinutes,
             thr, allowance, deduction,
             strField(body, 'notes') || null
           ]
         )
-        audit('PAYROLL_INPUT', employeeId, 'UPSERTED', { period: period.period })
+        audit(ctx, 'PAYROLL_INPUT', employeeId, 'UPSERTED', { period: period.period })
       })
       return Response.json({ ok: true })
     }],
@@ -931,7 +1081,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
             ]
           )
         }
-        audit('PAYROLL_PERIOD', period.id, 'CALCULATED', { period: period.period, employees: employees.length })
+        audit(ctx, 'PAYROLL_PERIOD', period.id, 'CALCULATED', { period: period.period, employees: employees.length })
       })
       return Response.json({ ok: true, employees: employees.length })
     }],
@@ -939,8 +1089,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
     ['POST', '/api/payroll/periods/:id/approve', async (ctx) => {
       const period = periodOf(intParam(ctx, 'id'))
       if (period.status !== 'DRAFT') throw AppError.badRequest('Periode sudah disetujui atau dibayar.')
-      const body = await readJson(ctx.req)
-      const operatorRole = strField(body, 'operator_role') || 'ADMIN'
+      const operatorRole = actorOf(ctx).role
       if (!['ADMIN', 'PENGGAJIAN'].includes(operatorRole)) {
         throw AppError.badRequest('Persetujuan periode harus dilakukan bagian penggajian atau admin.')
       }
@@ -989,6 +1138,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       let journalId = 0
       state.db.withTransaction(() => {
         journalId = postJournal(
+          ctx,
           period.period,
           lastDayOf(period.period),
           `Akrual gaji karyawan periode ${period.period}`,
@@ -997,9 +1147,9 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
         db.run(
           `UPDATE payroll_periods SET status = 'APPROVED', approved_by = ?, approved_at = ?,
            accrual_journal_id = ?, updated_at = datetime('now','localtime') WHERE id = ? AND company_id = ?`,
-          [operatorId, localTimestamp(), journalId, period.id, companyId]
+          [actorOf(ctx).id, localTimestamp(), journalId, period.id, companyId]
         )
-        audit('PAYROLL_PERIOD', period.id, 'APPROVED', { period: period.period, journalId, totals, operatorRole })
+        audit(ctx, 'PAYROLL_PERIOD', period.id, 'APPROVED', { period: period.period, journalId, totals, operatorRole })
       })
       return Response.json({ ok: true, journalId })
     }],
@@ -1008,8 +1158,7 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       const period = periodOf(intParam(ctx, 'id'))
       if (period.status !== 'APPROVED') throw AppError.badRequest('Periode belum disetujui.')
       if (!period.pay_date) throw AppError.badRequest('Tanggal bayar belum ditentukan.')
-      const body = await readJson(ctx.req)
-      const operatorRole = strField(body, 'operator_role') || 'ADMIN'
+      const operatorRole = actorOf(ctx).role
       if (!['ADMIN', 'KEUANGAN'].includes(operatorRole)) {
         throw AppError.badRequest('Pembayaran gaji harus dilakukan keuangan atau admin.')
       }
@@ -1031,13 +1180,13 @@ export function payrollRoutes(state: AppState): Array<[string, string, Handler]>
       ]
       let journalId = 0
       state.db.withTransaction(() => {
-        journalId = postJournal(period.period, period.pay_date, `Pembayaran gaji periode ${period.period}`, lines)
+        journalId = postJournal(ctx, period.period, period.pay_date, `Pembayaran gaji periode ${period.period}`, lines)
         db.run(
           `UPDATE payroll_periods SET status = 'PAID', paid_by = ?, paid_at = ?,
            payment_journal_id = ?, updated_at = datetime('now','localtime') WHERE id = ? AND company_id = ?`,
-          [operatorId, localTimestamp(), journalId, period.id, companyId]
+          [actorOf(ctx).id, localTimestamp(), journalId, period.id, companyId]
         )
-        audit('PAYROLL_PERIOD', period.id, 'PAID', { period: period.period, journalId, net, operatorRole })
+        audit(ctx, 'PAYROLL_PERIOD', period.id, 'PAID', { period: period.period, journalId, net, operatorRole })
       })
       return Response.json({ ok: true, journalId })
     }]

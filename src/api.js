@@ -26,7 +26,9 @@ export async function request(path, options = {}) {
   if (response.status === 204) return null
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload.message || 'Permintaan tidak dapat diproses oleh server Finova.')
+    const error = new Error(payload.message || 'Permintaan tidak dapat diproses oleh server Finova.')
+    error.status = response.status
+    throw error
   }
   return payload
 }

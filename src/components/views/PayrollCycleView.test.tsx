@@ -180,7 +180,7 @@ beforeEach(() => {
   fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method || 'GET'
-    const body = init?.body ? JSON.parse(String(init.body)) : {}
+    const body = typeof init?.body === 'string' && init.body ? JSON.parse(init.body) : {}
     if (method === 'POST' && url.endsWith('/change-requests')) {
       if (body.field_name === 'exit_date') pendingExitDate = body.new_value
       if (body.field_name === 'status' && body.new_value === 'INACTIVE' && !currentEmployee.exit_date && !pendingExitDate) {
@@ -204,7 +204,7 @@ beforeEach(() => {
       const status = difference === 0 ? 'OK' : 'MISMATCH'
       controlsState = [
         ...controlsState.filter((check) => check.kind !== kind),
-        { kind, expected_value: expected, actual_value: actual, difference, status, operator_role: body.operator_role, checked_at: '2026-11-26 10:00:00' }
+        { kind, expected_value: expected, actual_value: actual, difference, status, operator_role: 'SDM', checked_at: '2026-11-26 10:00:00' }
       ]
       return { ok: true, status: 200, json: async () => ({ ok: true, status, expected, actual, difference }) }
     }
@@ -315,10 +315,17 @@ describe('PayrollCycleView sesuai BAB V.pptx', () => {
     }
     expect(fieldOf('Hari absen').max).toBe('15')
     expect(fieldOf('Jumlah hari lembur biasa').max).toBe('15')
+    expect(fieldOf('Keterlambatan (menit)').max).toBe('1440')
     expect(fieldOf('THR / Tunjangan Hari Raya (Rp)').step).toBe('0.01')
     await click('pakai')
     expect(fieldOf('THR / Tunjangan Hari Raya (Rp)').value).toBe('2500000.55')
+    await setField('Keterlambatan (menit)', '45')
     expect((container.querySelector('#cycle-input-form') as HTMLFormElement).checkValidity()).toBe(true)
+    await click('Simpan input')
+    const saved = fetchMock.mock.calls
+      .filter(([url, init]) => String(url).includes('/inputs/') && init?.method === 'PUT')
+      .map(([, init]) => JSON.parse(String(init?.body)))
+    expect(saved.at(-1)?.late_minutes).toBe(45)
   })
 
   it('mengajukan nonaktif melalui perubahan yang disetujui, bukan DELETE langsung', async () => {
@@ -333,7 +340,7 @@ describe('PayrollCycleView sesuai BAB V.pptx', () => {
       .filter(([url, init]) => String(url) === '/api/payroll/change-requests' && init?.method === 'POST')
       .map(([, init]) => JSON.parse(String(init?.body)))
     expect(changes.map((change) => change.field_name)).toEqual(['exit_date', 'status'])
-    expect(changes.every((change) => change.requested_by_role === 'SDM')).toBe(true)
+    expect(changes.every((change) => Boolean(change.reason) && !('requested_by_role' in change))).toBe(true)
     expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes('/employees/1') && init?.method === 'DELETE')).toBe(false)
   })
 

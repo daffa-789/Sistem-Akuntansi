@@ -8,6 +8,7 @@ import path from 'node:path'
 import type { Config } from '../config'
 import { Db } from '../db'
 import { dataDirOf } from '../config'
+import type { AuthManager, AuthUser } from '../auth'
 
 export interface AppState {
   config: Config
@@ -20,6 +21,8 @@ export interface Ctx {
   url: URL
   params: Record<string, string>
   query: URLSearchParams
+  /** Pengguna dari sesi cookie; selalu terisi untuk rute /api selain health & login. */
+  user: AuthUser | null
 }
 
 export type Handler = (ctx: Ctx) => Response | Promise<Response>
@@ -33,6 +36,11 @@ interface Route {
 
 export class Router {
   private routes: Route[] = []
+  private auth: AuthManager | null = null
+
+  setAuth(auth: AuthManager): void {
+    this.auth = auth
+  }
 
   add(method: string, pattern: string, handler: Handler): void {
     const keys: string[] = []
@@ -77,6 +85,14 @@ export class Router {
       return new Response(null, { status: 204, headers: corsHeaders() })
     }
 
+    const user = this.auth?.userFromRequest(req) ?? null
+    const publicApi = pathname === '/api/health' || pathname === '/api/auth/login'
+    if (pathname.startsWith('/api') && !publicApi && !user) {
+      return withCors(
+        Response.json({ message: 'Silakan masuk terlebih dahulu.' }, { status: 401 })
+      )
+    }
+
     for (const route of this.routes) {
       if (route.method !== req.method) continue
       const match = route.regex.exec(pathname)
@@ -85,7 +101,7 @@ export class Router {
       route.keys.forEach((key, i) => {
         params[key] = decodeURIComponent(match[i + 1])
       })
-      const ctx: Ctx = { req, url, params, query: url.searchParams }
+      const ctx: Ctx = { req, url, params, query: url.searchParams, user }
       try {
         const response = await route.handler(ctx)
         return withCors(response)

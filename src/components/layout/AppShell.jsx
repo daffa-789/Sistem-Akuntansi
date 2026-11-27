@@ -1,7 +1,7 @@
 import React from 'react'
-import { Users } from 'lucide-react'
+import { LogOut, Users } from 'lucide-react'
 
-export function AppShell({ company, children }) {
+export function AppShell({ company, user, onLogout, children }) {
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Menu Aplikasi">
@@ -19,6 +19,13 @@ export function AppShell({ company, children }) {
             <span>Penggajian / SDM</span>
           </div>
         </div>
+        {user && <div className="user-panel">
+          <span className="user-panel-name">{user.name}</span>
+          <span className="user-panel-role">{user.role}</span>
+          <button type="button" className="user-logout" onClick={onLogout} title="Keluar">
+            <LogOut size={14} aria-hidden="true" /> Keluar
+          </button>
+        </div>}
       </aside>
 
       <main className="main">

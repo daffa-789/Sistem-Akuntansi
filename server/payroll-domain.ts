@@ -100,6 +100,8 @@ export interface PayrollPeriodInput {
   overtimeHours: number
   overtimeDays?: number
   holidayOvertimeHours: number
+  /** Menit keterlambatan; dicatat sebagai data waktu kerja, bukan potongan gaji otomatis. */
+  lateMinutes?: number
   thrAmount: number
   otherAllowance: number
   otherDeduction: number
@@ -319,6 +321,7 @@ export function calculatePayroll(
       calendarDays,
       absenceDeduction,
       overtimeDays,
+      lateMinutes: Math.max(0, Math.floor(Number(period.lateMinutes) || 0)),
       healthBase,
       jpBase,
       jkkRate: JKK_RATES[riskIndex],
