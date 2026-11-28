@@ -63,6 +63,59 @@ membalas 404 untuknya. Permintaan user 27 Sep ("simpan musik hasil unduhan dari 
 diklarifikasi lebih dulu; user memilih jalur sah ini, bukan pengunduhan audio. Rincian jebakan
 teknis ada di `.workbuddy-ai/memory/2026-09-27.md` (parsing skema, makensis, sandbox).
 
+## R10. Modul Siklus Pendapatan & Pengeluaran bertema Maid Caffe (28 November 2026)
+
+Perintah user: *"saya ingin kamu tambahkan sistem pendapatan dan pengeluaran dari proyek ini
+dengan tema maid caffe"* (dengan lampiran BAB V.pptx). Dua siklus utama SIA dari BAB V
+(bagian B dan C) ditambahkan ke Finova dengan bisnis demonstrasi kafe maid.
+
+**Keputusan (disetujui user lewat pertanyaan):**
+1. Nama bisnis demo = **Maid Caffe Finova** — menggantikan "PT Finova Penggajian Indonesia"
+   (seed SCHEMA_SQL, default `COMPANY_NAME`, `.env`). DB lama ikut berganti bila namanya masih
+   bawaan lama (bootstrap `UPDATE companies ... WHERE name IN (nama lama)`; nama hasil edit
+   user tidak ditimpa).
+2. Modul baru **mulai kosong** tanpa data demo transaksi (konsisten dengan modul payroll);
+   menu/pelanggan/pemasok diketik lewat UI.
+3. **Tanpa perubahan visual** — seluruh tampilan memakai design system Finova yang ada;
+   tema hanya pada konten bisnis (menu, member, roastery kopi, kostum maid, label dokumen).
+
+**Arsitektur (mengikuti pola payroll persis):**
+- Tabel baru di `server/schema.ts`: `revenue_customers/menu_items/orders/order_items/
+  invoices/receipts/control_checks` dan `purchase_suppliers/requisitions/requisition_items/
+  orders/order_items/goods_receipts/bills/payments/control_checks` + 8 akun baru
+  (1120 Kas di Tangan, 1130 Piutang Usaha, 2120 Utang Usaha, 4100 Pendapatan, 5100/5300/5400/5500 Beban).
+- Domain murni `server/revenue-domain.ts` (limit kredit, alokasi penerimaan, akun kas) dan
+  `server/expenditure-domain.ts` (three-way match, pemetaan beban per kategori pemasok).
+- Route `server/routes/revenue.ts` (voucher `REV-YYYY-MM-NNN`, dokumen SO-/FJ-/BKM-) dan
+  `server/routes/expenditure.ts` (voucher `EXP-`, dokumen PR-/PO-/LPB-/FP-/BKK-), source jurnal
+  `'REVENUE'`/`'EXPENDITURE'`; registered di `server/app.ts`.
+- Pemisahan tugas pakai **3 akun demo baru**: `penjualan@` (PENJUALAN), `gudang@` (GUDANG),
+  `pembelian@` (PEMBELIAN) + peran lama (AKUNTANSI=faktur, KEUANGAN=kas, SDM_MANAGER=penyetuju
+  kredit & pembelian). Gate peran dari sesi, bukan body.
+- Alur pendapatan: pesanan DRAFT→DITERIMA(penjualan)→DISAJIKAN(gudang)→DIFAKTURKAN(akuntansi);
+  kredit butuh persetujuan manajer + limit kredit; tunai otomatis buat BKM + jurnal kas;
+  setoran bank = jurnal 1120→1110. Alur pengeluaran: PR→disetujui manajer→PO(pembelian)→
+  kirim→LPB(gudang)→faktur pemasok(akuntansi, three-way match ditolak 422 bila selisih)→
+  pembayaran(keuangan, hanya faktur MATCHED).
+- Frontend: `App.jsx` state `page`, `AppShell.jsx` nav dua section (MODUL SDM + MODUL SIA),
+  view baru `RevenueCycleView.jsx` (7 tab, SIKLUS 01) dan `ExpenditureCycleView.jsx`
+  (7 tab, SIKLUS 02) meniru struktur PayrollCycleView. `db:clean` ikut membersihkan tabel baru.
+- `shared/types.ts`: `JournalSource` + 'REVENUE'|'EXPENDITURE', interface modul baru.
+
+**Catatan teknis yang sudah dibayar mahal (jangan diulang):**
+- Modal frontend pola `{ ..., draft }` wajib memakai `setDraftField` — `setField` level atas
+  menimpa field yang salah dan input terkontrol tidak pernah berubah (bug riil yang tertangkap test).
+- Item baris PO tidak boleh memakai patcher modal lain (dulu `patchRequisitionItem` dipakai
+  di modal PO → crash `null.items`); ada `patchPoItem` terpisah.
+- Test UI: `<select>` perlu event `change` (bukan hanya `input`), `<textarea>` perlu setter
+  HTMLTextAreaElement, dan submit modal footer (`form="…"`) di jsdom diganti dispatch event
+  `submit` langsung ke form.
+
+**Verifikasi (semua hijau):** typecheck 0 error; `bun test server` **113 lulus**
+(61 payroll + 25 domain baru + 13 revenue + 12 expenditure); `test:ui` **27 lulus**
+(11 lama + 9 revenue view + 7 expenditure view); `bun run build` sukses; smoke biner/DB
+scratch + probe Playwright dua modul baru. Working tree bersih saat mulai (HEAD 5d290e0).
+
 ## R8. Migrasi backend Rust → Bun (19 Oktober 2026)
 
 Perintah user: *"rewite ke bun itu kode buang rust"*. Backend Axum+rusqlite di

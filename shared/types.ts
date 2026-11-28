@@ -4,7 +4,7 @@ export type AccountGroup = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPEN
 export type NormalBalance = 'DEBIT' | 'CREDIT'
 export type CashFlowCategory = 'OPERATING' | 'INVESTING' | 'FINANCING' | 'NON_CASH'
 export type JournalStatus = 'DRAFT' | 'POSTED' | 'REVERSED'
-export type JournalSource = 'MANUAL' | 'IMPORT' | 'CLOSING' | 'REVERSAL' | 'PAYROLL'
+export type JournalSource = 'MANUAL' | 'IMPORT' | 'CLOSING' | 'REVERSAL' | 'PAYROLL' | 'REVENUE' | 'EXPENDITURE'
 export type PeriodStatus = 'OPEN' | 'CLOSED'
 export type UserRole = 'ADMIN' | 'STAFF' | 'ACCOUNTANT' | 'VIEWER' | string
 
@@ -222,4 +222,231 @@ export interface LedgerReport {
   entries: LedgerEntry[]
   startingBalance: number
   endingBalance: number
+}
+
+// ===== Siklus Pendapatan (BAB V bagian B) =====
+
+export type CustomerType = 'TUNAI' | 'MEMBER' | 'KORPORAT'
+export type MenuCategory = 'MINUMAN' | 'MAKANAN' | 'DESSERT' | 'PAKET_EVENT' | 'MERCH'
+export type OrderType = 'DINE_IN' | 'TAKE_AWAY' | 'CATERING' | 'EVENT'
+export type OrderPaymentType = 'TUNAI' | 'KREDIT'
+/** DRAFT -> DITERIMA -> DISAJIKAN -> DIFAKTURKAN (atau DIBATALKAN). */
+export type OrderStatus = 'DRAFT' | 'DITERIMA' | 'DISAJIKAN' | 'DIFAKTURKAN' | 'DIBATALKAN'
+export type ReceiptMethod = 'KAS' | 'BANK'
+export type DepositStatus = 'NOT_DEPOSITED' | 'DEPOSITED'
+
+export interface RevenueCustomer {
+  id: number
+  company_id: number
+  customer_code: string
+  name: string
+  customer_type: CustomerType
+  phone: string
+  address: string
+  credit_limit: number
+  is_active: number | boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface RevenueMenuItem {
+  id: number
+  company_id: number
+  item_code: string
+  name: string
+  category: MenuCategory
+  unit_price: number
+  is_active: number | boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface RevenueOrderItem {
+  id?: number
+  order_id?: number
+  menu_item_id?: number | null
+  description: string
+  qty: number
+  unit_price: number
+  line_total: number
+}
+
+export interface RevenueOrder {
+  id: number
+  company_id: number
+  order_no: string
+  order_date: string
+  customer_id: number
+  customer_name?: string
+  order_type: OrderType
+  payment_type: OrderPaymentType
+  status: OrderStatus
+  served_at?: string | null
+  served_note?: string | null
+  credit_approved_by?: number | null
+  credit_approved_at?: string | null
+  credit_approval_note?: string | null
+  notes?: string | null
+  total?: number
+  items?: RevenueOrderItem[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface RevenueInvoice {
+  id: number
+  company_id: number
+  invoice_no: string
+  invoice_date: string
+  order_id: number
+  order_no?: string
+  customer_id: number
+  customer_name?: string
+  customer_type?: CustomerType
+  payment_type?: OrderPaymentType
+  amount: number
+  paid: number
+  due_date?: string | null
+  status: 'OPEN' | 'PAID'
+  accrual_journal_id?: number | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface RevenueReceipt {
+  id: number
+  company_id: number
+  receipt_no: string
+  receipt_date: string
+  invoice_id: number
+  invoice_no?: string
+  amount: number
+  method: ReceiptMethod
+  deposit_status: DepositStatus
+  deposited_at?: string | null
+  deposit_reference?: string | null
+  payment_journal_id?: number | null
+  created_at?: string
+}
+
+// ===== Siklus Pengeluaran (BAB V bagian C) =====
+
+export type SupplierCategory = 'BAHAN_BAKU' | 'KOSTUM' | 'UTILITY' | 'JASA'
+/** DRAFT -> DIKIRIM -> SELESAI (atau DIBATALKAN). */
+export type PurchaseOrderStatus = 'DRAFT' | 'DIKIRIM' | 'SELESAI' | 'DIBATALKAN'
+export type BillMatchStatus = 'PENDING' | 'MATCHED' | 'MISMATCH'
+
+export interface PurchaseSupplier {
+  id: number
+  company_id: number
+  supplier_code: string
+  name: string
+  category: SupplierCategory
+  phone: string
+  address: string
+  is_trusted: number | boolean
+  is_active: number | boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PurchaseRequisitionItem {
+  id?: number
+  requisition_id?: number
+  description: string
+  qty: number
+  est_price: number
+  est_total: number
+}
+
+export interface PurchaseRequisition {
+  id: number
+  company_id: number
+  requisition_no: string
+  requisition_date: string
+  department: string
+  requested_by: string
+  reason: string
+  status: 'DRAFT' | 'APPROVED' | 'REJECTED'
+  approved_by?: number | null
+  approved_at?: string | null
+  decision_note?: string | null
+  estimated_total?: number
+  items?: PurchaseRequisitionItem[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PurchaseOrderItem {
+  id?: number
+  order_id?: number
+  description: string
+  qty: number
+  unit_price: number
+  line_total: number
+}
+
+export interface PurchaseOrder {
+  id: number
+  company_id: number
+  order_no: string
+  order_date: string
+  requisition_id: number
+  requisition_no?: string
+  supplier_id: number
+  supplier_name?: string
+  supplier_category?: SupplierCategory
+  status: PurchaseOrderStatus
+  total: number
+  notes?: string | null
+  sent_at?: string | null
+  items?: PurchaseOrderItem[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PurchaseGoodsReceipt {
+  id: number
+  company_id: number
+  receipt_no: string
+  receipt_date: string
+  order_id: number
+  order_no?: string
+  accepted_total: number
+  condition_note?: string | null
+  checked_by: string
+  created_at?: string
+}
+
+export interface PurchaseBill {
+  id: number
+  company_id: number
+  bill_no: string
+  bill_date: string
+  order_id: number
+  order_no?: string
+  supplier_id: number
+  supplier_name?: string
+  supplier_invoice_no: string
+  amount: number
+  paid: number
+  match_status: BillMatchStatus
+  status: 'OPEN' | 'PAID'
+  ap_journal_id?: number | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PurchasePayment {
+  id: number
+  company_id: number
+  payment_no: string
+  payment_date: string
+  bill_id: number
+  bill_no?: string
+  amount: number
+  method: ReceiptMethod
+  reference_no: string
+  payment_journal_id?: number | null
+  created_at?: string
 }

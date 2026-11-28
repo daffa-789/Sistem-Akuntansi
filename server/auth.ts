@@ -17,7 +17,13 @@ export const DEMO_USERS: Array<{ email: string; name: string; role: string }> = 
   { email: 'penggajian@finova.local', name: 'Bagian Penggajian', role: 'PENGGAJIAN' },
   { email: 'akuntansi@finova.local', name: 'Bagian Akuntansi', role: 'AKUNTANSI' },
   { email: 'keuangan@finova.local', name: 'Bagian Keuangan', role: 'KEUANGAN' },
-  { email: 'manajer-sdm@finova.local', name: 'Manajer SDM', role: 'SDM_MANAGER' }
+  { email: 'manajer-sdm@finova.local', name: 'Manajer SDM', role: 'SDM_MANAGER' },
+  // Pemisahan tugas siklus pendapatan & pengeluaran (BAB V.pptx bagian B dan C):
+  // penjualan, gudang, penagihan, penerimaan kas, pengadaan, dan pembayaran
+  // tidak boleh digabung dalam satu orang.
+  { email: 'penjualan@finova.local', name: 'Bagian Penjualan', role: 'PENJUALAN' },
+  { email: 'gudang@finova.local', name: 'Bagian Gudang', role: 'GUDANG' },
+  { email: 'pembelian@finova.local', name: 'Bagian Pembelian', role: 'PEMBELIAN' }
 ]
 
 export interface AuthUser {

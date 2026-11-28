@@ -74,6 +74,14 @@ export class Db {
         [companyId, companyName]
       )
 
+      // Bisnis demonstrasi kini kafe maid (tema modul SIA). Nama bawaan lama
+      // diperbarui; nama yang sudah diedit pengguna tidak ditimpa.
+      this.db.run(
+        `UPDATE companies SET name = 'Maid Caffe Finova', updated_at = datetime('now','localtime')
+         WHERE id = ? AND name IN ('PT Finova Penggajian Indonesia', 'PT Finova Akuntansi Indonesia')`,
+        [companyId]
+      )
+
       // Pengguna bawaan yang lama tidak bisa login; aktifkan kembali dengan
       // sandi demo yang sama dengan akun-akun peran di bawah.
       const legacyUser = this.db
@@ -161,6 +169,23 @@ export class Db {
       this.db.run('DELETE FROM payroll_runs WHERE company_id = ?', [companyId])
       this.db.run('DELETE FROM payroll_inputs WHERE company_id = ?', [companyId])
       this.db.run('DELETE FROM payroll_periods WHERE company_id = ?', [companyId])
+      // Data transaksi siklus pendapatan dan pengeluaran juga dibersihkan.
+      this.db.run('DELETE FROM revenue_control_checks WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM revenue_receipts WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM revenue_invoices WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM revenue_order_items WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM revenue_orders WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM revenue_menu_items WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM revenue_customers WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM expenditure_control_checks WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM purchase_payments WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM purchase_bills WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM purchase_goods_receipts WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM purchase_order_items WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM purchase_orders WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM purchase_requisition_items WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM purchase_requisitions WHERE company_id = ?', [companyId])
+      this.db.run('DELETE FROM purchase_suppliers WHERE company_id = ?', [companyId])
       this.db.run('UPDATE journal_entries SET reversal_of_id = NULL WHERE company_id = ?', [companyId])
       this.db.run(
         'DELETE FROM journal_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE company_id = ?)',

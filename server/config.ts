@@ -42,7 +42,7 @@ export function loadConfig(): Config {
     port,
     databaseFile,
     clientOrigin: getVar('CLIENT_ORIGIN') ?? '',
-    companyName: getVar('COMPANY_NAME') ?? 'PT Finova Akuntansi Indonesia',
+    companyName: getVar('COMPANY_NAME') ?? 'Maid Caffe Finova',
     operatorName: getVar('OPERATOR_NAME') ?? 'Operator',
     staticDir: getVar('STATIC_DIR'),
     companyId: 1,

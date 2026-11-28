@@ -1,12 +1,18 @@
-# Finova — Sistem Penggajian & SDM
+# Finova — Sistem Akuntansi Maid Caffe (Penggajian, Pendapatan & Pengeluaran)
 
-Finova adalah aplikasi **penggajian dan SDM** berjalan di peramban dengan backend **Bun** (`bun:sqlite` dan HTTP bawaan) serta frontend **React 18 + Vite** dalam JavaScript/JSX. Server tetap menggunakan TypeScript untuk validasi domain dan kontrak API.
+Finova adalah aplikasi **sistem akuntansi** untuk bisnis demonstrasi kafe maid **Maid Caffe Finova**, berjalan di peramban dengan backend **Bun** (`bun:sqlite` dan HTTP bawaan) serta frontend **React 18 + Vite** dalam JavaScript/JSX. Server tetap menggunakan TypeScript untuk validasi domain dan kontrak API. Isi modul mengikuti BAB V *Siklus Utama dalam Sistem Informasi Akuntansi*: siklus penggajian/SDM (bagian E), siklus pendapatan (bagian B), dan siklus pengeluaran (bagian C).
 
 ## Cakupan
 
-Aplikasi hanya menyediakan workspace **Penggajian / SDM**. Modul pendapatan, pengeluaran, produksi, laporan akuntansi, jurnal umum, template, impor, ekspor, dan musik sudah tidak tersedia.
+Tiga workspace sesuai siklus BAB V.pptx:
 
-Infrastruktur akuntansi yang tetap ada hanya penopang penggajian: data perusahaan, enam akun gaji, periode akuntansi, jurnal akrual/pembayaran, validasi debit–kredit, dan audit trail. Modul-modul tersebut tidak dibuka sebagai workspace atau API pengelolaan akuntansi umum.
+1. **Penggajian / SDM** — data karyawan, kehadiran, hitung gaji, pembayaran, dokumen, jurnal, dan pengendalian internal.
+2. **Siklus Pendapatan** — pesanan penjualan menu kafe maid, penyajian, faktur (tunai/kredit dengan piutang), penerimaan kas, setoran bank, jurnal, dan pengendalian.
+3. **Siklus Pengeluaran** — permintaan pembelian, persetujuan manajer, PO kepada pemasok (bahan kopi, kostum maid, utilitas), penerimaan barang, faktur pemasok dengan pencocokan tiga arah, pembayaran, jurnal, dan pengendalian.
+
+Modul produksi, laporan akuntansi umum, jurnal umum bebas, template, impor, ekspor, dan musik tetap tidak tersedia. Modul baru mulai **kosong** (tanpa data demo) — menu, pelanggan, dan pemasok diketik lewat UI.
+
+Infrastruktur akuntansi bersama: data perusahaan, 14 akun (gaji, kas/bank, piutang, utang usaha, pendapatan, beban), periode akuntansi, jurnal debit–kredit seimbang, dan audit trail.
 
 ## Fitur penggajian
 
@@ -22,11 +28,34 @@ Infrastruktur akuntansi yang tetap ada hanya penopang penggajian: data perusahaa
 - Slip gaji dan tampilan jurnal dalam workspace penggajian.
 - Audit trail aktivitas payroll.
 
+## Fitur siklus pendapatan
+
+- Data menu kafe maid (minuman, makanan, dessert, paket event, merchandise) dan pelanggan (tunai, member, korporat dengan limit kredit).
+- Pesanan penjualan `SO-…` dengan status `DRAFT → DITERIMA → DISAJIKAN → DIFAKTURKAN` (atau `DIBATALKAN`), sesuai empat aktivitas BAB V bagian B.
+- Pemisahan tugas lewat akun login: penjualan (konfirmasi), gudang (penyajian), akuntansi (faktur), keuangan (kas).
+- Persetujuan penjualan kredit oleh manajer dengan pengecekan limit kredit terhadap piutang berjalan.
+- Faktur penjualan `FJ-…`: tunai langsung membentuk bukti penerimaan kas dan jurnal kas; kredit membentuk piutang (jurnal debit Piutang Usaha 1130 / kredit Pendapatan 4100).
+- Bukti penerimaan kas `BKM-…` untuk pelunasan piutang dan setoran bank dari Kas di Tangan 1120 ke Kas di Bank 1110.
+- Rekonsiliasi penerimaan kas dengan rekening bank per bulan.
+- Audit trail seluruh aktivitas pendapatan.
+
+## Fitur siklus pengeluaran
+
+- Data pemasok per kategori (bahan baku, kostum, utilitas, jasa) dengan penanda pemasok terpercaya.
+- Surat permintaan pembelian `PR-…` dari bagian dapur/kafe/kostum/umum; persetujuan wajib oleh manajer.
+- Pesanan pembelian `PO-…` oleh bagian pembelian; peringatan bila pemasok belum terpercaya.
+- Laporan penerimaan barang `LPB-…` oleh gudang (jumlah, kondisi, pemeriksa).
+- Faktur pemasok dicatat akuntansi dengan **pencocokan tiga arah** PO = penerimaan = faktur; selisih ditolak sistem.
+- Jurnal utang: debit beban sesuai kategori pemasok (5100/5300/5400/5500), kredit Utang Usaha 2120.
+- Pembayaran `BKK-…` hanya oleh keuangan pada faktur MATCHED, dengan bukti transfer.
+- Rekonsiliasi catatan utang dengan laporan pemasok per bulan.
+- Audit trail seluruh aktivitas pengeluaran.
+
 ## Arsitektur
 
 ```
 Peramban ──HTTP──> server Bun (server/app.ts)
-                      ├── API payroll dan data pendukung
+                      ├── API payroll, pendapatan, pengeluaran, dan data pendukung
                       ├── bun:sqlite (database/finova.sqlite)
                       └── aset SPA (internal/web/dist)
 ```
@@ -60,7 +89,7 @@ bun run start -- -no-browser
 ## Testing
 
 ```bash
-bun run test         # 57 test server + 10 test UI
+bun run test         # 113 test server + 27 test UI
 bun run test:server  # hanya server
 bun run test:ui      # hanya UI
 bun run typecheck    # TypeScript server dan definisi frontend
@@ -93,7 +122,7 @@ Variabel lingkungan atau `.env`:
 | `bun run build` | Build frontend dan server. |
 | `bun start` | Jalankan aplikasi web. |
 | `bun run db:init` | Inisialisasi database lokal. |
-| `bun run db:clean` | Hapus periode gaji, hasil hitung, dokumen, kontrol, jurnal tertaut, dan audit payroll; pertahankan karyawan, perusahaan, enam akun, serta periode akuntansi. |
+| `bun run db:clean` | Hapus transaksi payroll, pendapatan, pengeluaran, jurnal tertaut, dan audit; pertahankan karyawan, pelanggan, menu, pemasok, perusahaan, akun, serta periode akuntansi. |
 | `bun run clean` | Bersihkan hasil build dan cache. |
 
 ## REST API
@@ -102,7 +131,7 @@ Variabel lingkungan atau `.env`:
 
 - `GET /api/health` — health check.
 - `GET/PUT /api/company` — data perusahaan.
-- `GET /api/accounts` — enam akun yang dipakai jurnal penggajian.
+- `GET /api/accounts` — 14 akun: penggajian, kas/bank, piutang, utang usaha, pendapatan, dan beban.
 - `GET/POST /api/periods` — periode akuntansi pendukung posting jurnal.
 
 ### Karyawan dan SDM
@@ -126,8 +155,39 @@ Variabel lingkungan atau `.env`:
 - `DELETE /api/payroll/documents/:id` — hapus dokumen payroll.
 - `GET/POST /api/payroll/periods/:id/controls` — verifikasi penerima dan rekonsiliasi.
 
-Endpoint non-penggajian lama, seperti `/api/journals`, `/api/reports`, `/api/imports`, `/api/exports`, dan `/api/music`, mengembalikan 404.
+### Siklus pendapatan
+
+- `GET/POST/PUT /api/revenue/customers` — data pelanggan dan limit kredit.
+- `GET/POST/PUT /api/revenue/menu-items` — data menu kafe maid.
+- `GET/POST /api/revenue/orders` — pesanan penjualan dengan item menu.
+- `POST /api/revenue/orders/:id/confirm` — konfirmasi pesanan (penjualan).
+- `POST /api/revenue/orders/:id/serve` — catat penyajian (gudang).
+- `POST /api/revenue/orders/:id/approve-credit` — persetujuan penjualan kredit (manajer).
+- `POST /api/revenue/orders/:id/invoice` — buat faktur; tunai langsung terbayar, kredit membentuk piutang.
+- `POST /api/revenue/orders/:id/cancel` — batalkan pesanan sebelum disajikan.
+- `GET /api/revenue/invoices` — faktur dan kartu piutang.
+- `GET/POST /api/revenue/receipts` — bukti penerimaan kas.
+- `POST /api/revenue/receipts/:id/deposit` — setoran bank dari kas di tangan.
+- `GET /api/revenue/journals` — jurnal sumber REVENUE.
+- `GET/POST /api/revenue/controls` — rekonsiliasi penerimaan kas dengan rekening bank.
+
+### Siklus pengeluaran
+
+- `GET/POST/PUT /api/expenditure/suppliers` — data pemasok dan penanda terpercaya.
+- `GET/POST /api/expenditure/requisitions` — surat permintaan pembelian.
+- `POST /api/expenditure/requisitions/:id/decide` — persetujuan permintaan (manajer).
+- `GET/POST /api/expenditure/orders` — pesanan pembelian dari permintaan disetujui.
+- `POST /api/expenditure/orders/:id/send` — terbitkan PO kepada pemasok.
+- `POST /api/expenditure/orders/:id/receipt` — laporan penerimaan barang (gudang).
+- `POST /api/expenditure/orders/:id/cancel` — batalkan PO sebelum barang diterima.
+- `GET /api/expenditure/receipts` — daftar laporan penerimaan barang.
+- `GET/POST /api/expenditure/bills` — catat faktur pemasok dengan pencocokan tiga arah.
+- `GET/POST /api/expenditure/payments` — pembayaran pemasok (keuangan) dengan bukti kas keluar.
+- `GET /api/expenditure/journals` — jurnal sumber EXPENDITURE.
+- `GET/POST /api/expenditure/controls` — rekonsiliasi utang dengan laporan pemasok.
+
+Endpoint non-modul lama, seperti `/api/journals`, `/api/reports`, `/api/imports`, `/api/exports`, dan `/api/music`, mengembalikan 404.
 
 ## Catatan
 
-Data disimpan lokal di SQLite; tidak memerlukan XAMPP, phpMyAdmin, atau layanan database terpisah. Validasi peran payroll mendukung pengendalian internal, tetapi bukan pengganti autentikasi karena aplikasi berjalan tanpa login. Aplikasi desktop lama tidak diperlukan lagi dan dapat dihapus melalui Pengaturan > Aplikasi.
+Data disimpan lokal di SQLite; tidak memerlukan XAMPP, phpMyAdmin, atau layanan database terpisah. Setiap peran pemisahan tugas (SDM, penggajian, akuntansi, keuangan, manajer, penjualan, gudang, pembelian) memiliki akun demo sendiri dengan sandi bersama `finova2026`; kewenangan diperiksa dari sesi login. Aplikasi desktop lama tidak diperlukan lagi dan dapat dihapus melalui Pengaturan > Aplikasi.

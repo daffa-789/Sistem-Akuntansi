@@ -109,7 +109,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_audit_company_created ON audit_logs(company_id, created_at);
 
-INSERT OR IGNORE INTO companies (id, name, currency) VALUES (1, 'PT Finova Penggajian Indonesia', 'IDR');
+-- Bisnis demonstrasi: kafe maid "Maid Caffe Finova" (tema modul SIA).
+INSERT OR IGNORE INTO companies (id, name, currency) VALUES (1, 'Maid Caffe Finova', 'IDR');
 
 INSERT OR IGNORE INTO accounts (company_id, code, name, account_group, account_subtype, normal_balance, cash_flow_category, is_cash_account) VALUES
   (1, '1110', 'Kas di Bank', 'ASSET', 'BANK', 'DEBIT', 'OPERATING', 1),
@@ -117,7 +118,16 @@ INSERT OR IGNORE INTO accounts (company_id, code, name, account_group, account_s
   (1, '2130', 'Utang BPJS', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
   (1, '2140', 'Utang PPh 21', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
   (1, '2150', 'Utang Potongan Lain', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
-  (1, '5200', 'Beban Gaji & Upah', 'EXPENSE', 'SALARY', 'DEBIT', 'OPERATING', 0);
+  (1, '5200', 'Beban Gaji & Upah', 'EXPENSE', 'SALARY', 'DEBIT', 'OPERATING', 0),
+  -- Akun siklus pendapatan & pengeluaran (BAB V bagian B dan C).
+  (1, '1120', 'Kas di Tangan', 'ASSET', 'CASH', 'DEBIT', 'OPERATING', 1),
+  (1, '1130', 'Piutang Usaha', 'ASSET', 'RECEIVABLE', 'DEBIT', 'OPERATING', 0),
+  (1, '2120', 'Utang Usaha', 'LIABILITY', 'PAYABLE', 'CREDIT', 'OPERATING', 0),
+  (1, '4100', 'Pendapatan Menu & Layanan', 'REVENUE', 'OPERATING_REVENUE', 'CREDIT', 'OPERATING', 0),
+  (1, '5100', 'Beban Bahan & Bahan Habis Pakai', 'EXPENSE', 'MATERIAL', 'DEBIT', 'OPERATING', 0),
+  (1, '5300', 'Beban Utilitas & Operasional', 'EXPENSE', 'OPERATING', 'DEBIT', 'OPERATING', 0),
+  (1, '5400', 'Beban Kostum & Perlengkapan', 'EXPENSE', 'OPERATING', 'DEBIT', 'OPERATING', 0),
+  (1, '5500', 'Beban Jasa & Operasional Lain', 'EXPENSE', 'OPERATING', 'DEBIT', 'OPERATING', 0);
 
 CREATE TABLE IF NOT EXISTS payroll_employees (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -268,5 +278,261 @@ CREATE TABLE IF NOT EXISTS payroll_control_checks (
   checked_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   note TEXT NULL,
   UNIQUE(company_id, period_id, kind)
+);
+
+-- ============================================================
+-- Bagian B BAB V.pptx: Siklus Pendapatan (Revenue Cycle).
+-- Alur: pesanan penjualan -> penyajian -> faktur (tunai/kredit)
+--       -> penerimaan kas -> setoran bank.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS revenue_customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  customer_code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  customer_type TEXT NOT NULL DEFAULT 'TUNAI',
+  phone TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  credit_limit REAL NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, customer_code)
+);
+
+CREATE TABLE IF NOT EXISTS revenue_menu_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  item_code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'MINUMAN',
+  unit_price REAL NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, item_code)
+);
+
+CREATE TABLE IF NOT EXISTS revenue_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  order_no TEXT NOT NULL,
+  order_date TEXT NOT NULL,
+  customer_id INTEGER NOT NULL REFERENCES revenue_customers(id),
+  order_type TEXT NOT NULL DEFAULT 'DINE_IN',
+  payment_type TEXT NOT NULL DEFAULT 'TUNAI',
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  served_at TEXT NULL,
+  served_note TEXT NULL,
+  credit_approved_by INTEGER REFERENCES users(id),
+  credit_approved_at TEXT NULL,
+  credit_approval_note TEXT NULL,
+  notes TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, order_no)
+);
+
+CREATE INDEX IF NOT EXISTS idx_revenue_orders_customer ON revenue_orders(company_id, customer_id, status);
+
+CREATE TABLE IF NOT EXISTS revenue_order_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  order_id INTEGER NOT NULL REFERENCES revenue_orders(id) ON DELETE CASCADE,
+  menu_item_id INTEGER REFERENCES revenue_menu_items(id),
+  description TEXT NOT NULL,
+  qty REAL NOT NULL DEFAULT 1,
+  unit_price REAL NOT NULL DEFAULT 0,
+  line_total REAL NOT NULL DEFAULT 0,
+  UNIQUE(order_id, description)
+);
+
+CREATE TABLE IF NOT EXISTS revenue_invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  invoice_no TEXT NOT NULL,
+  invoice_date TEXT NOT NULL,
+  order_id INTEGER NOT NULL REFERENCES revenue_orders(id),
+  customer_id INTEGER NOT NULL REFERENCES revenue_customers(id),
+  amount REAL NOT NULL DEFAULT 0,
+  paid REAL NOT NULL DEFAULT 0,
+  due_date TEXT NULL,
+  status TEXT NOT NULL DEFAULT 'OPEN',
+  accrual_journal_id INTEGER REFERENCES journal_entries(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, invoice_no)
+);
+
+CREATE INDEX IF NOT EXISTS idx_revenue_invoices_customer ON revenue_invoices(company_id, customer_id, status);
+
+CREATE TABLE IF NOT EXISTS revenue_receipts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  receipt_no TEXT NOT NULL,
+  receipt_date TEXT NOT NULL,
+  invoice_id INTEGER NOT NULL REFERENCES revenue_invoices(id),
+  amount REAL NOT NULL DEFAULT 0,
+  method TEXT NOT NULL DEFAULT 'BANK',
+  deposit_status TEXT NOT NULL DEFAULT 'NOT_DEPOSITED',
+  deposited_at TEXT NULL,
+  deposit_reference TEXT NULL,
+  payment_journal_id INTEGER REFERENCES journal_entries(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, receipt_no)
+);
+
+CREATE TABLE IF NOT EXISTS revenue_control_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  expected_value REAL NOT NULL DEFAULT 0,
+  actual_value REAL NOT NULL DEFAULT 0,
+  difference REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'DONE',
+  operator_id INTEGER REFERENCES users(id),
+  operator_role TEXT NOT NULL DEFAULT '',
+  checked_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  note TEXT NULL,
+  UNIQUE(company_id, period, kind)
+);
+
+-- ============================================================
+-- Bagian C BAB V.pptx: Siklus Pengeluaran (Expenditure Cycle).
+-- Alur: permintaan pembelian -> pesanan pembelian -> penerimaan
+--       barang -> faktur pemasok (three-way match) -> pembayaran.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS purchase_suppliers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  supplier_code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'BAHAN_BAKU',
+  phone TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  is_trusted INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, supplier_code)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_requisitions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  requisition_no TEXT NOT NULL,
+  requisition_date TEXT NOT NULL,
+  department TEXT NOT NULL DEFAULT 'DAPUR',
+  requested_by TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  approved_by INTEGER REFERENCES users(id),
+  approved_at TEXT NULL,
+  decision_note TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, requisition_no)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_requisition_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  requisition_id INTEGER NOT NULL REFERENCES purchase_requisitions(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  qty REAL NOT NULL DEFAULT 1,
+  est_price REAL NOT NULL DEFAULT 0,
+  est_total REAL NOT NULL DEFAULT 0,
+  UNIQUE(requisition_id, description)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  order_no TEXT NOT NULL,
+  order_date TEXT NOT NULL,
+  requisition_id INTEGER NOT NULL REFERENCES purchase_requisitions(id),
+  supplier_id INTEGER NOT NULL REFERENCES purchase_suppliers(id),
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  total REAL NOT NULL DEFAULT 0,
+  notes TEXT NULL,
+  sent_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, order_no)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_order_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  order_id INTEGER NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  qty REAL NOT NULL DEFAULT 1,
+  unit_price REAL NOT NULL DEFAULT 0,
+  line_total REAL NOT NULL DEFAULT 0,
+  UNIQUE(order_id, description)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_goods_receipts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  receipt_no TEXT NOT NULL,
+  receipt_date TEXT NOT NULL,
+  order_id INTEGER NOT NULL REFERENCES purchase_orders(id),
+  accepted_total REAL NOT NULL DEFAULT 0,
+  condition_note TEXT NULL,
+  checked_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, receipt_no)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_bills (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  bill_no TEXT NOT NULL,
+  bill_date TEXT NOT NULL,
+  order_id INTEGER NOT NULL REFERENCES purchase_orders(id),
+  supplier_id INTEGER NOT NULL REFERENCES purchase_suppliers(id),
+  supplier_invoice_no TEXT NOT NULL DEFAULT '',
+  amount REAL NOT NULL DEFAULT 0,
+  paid REAL NOT NULL DEFAULT 0,
+  match_status TEXT NOT NULL DEFAULT 'PENDING',
+  status TEXT NOT NULL DEFAULT 'OPEN',
+  ap_journal_id INTEGER REFERENCES journal_entries(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, bill_no)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  payment_no TEXT NOT NULL,
+  payment_date TEXT NOT NULL,
+  bill_id INTEGER NOT NULL REFERENCES purchase_bills(id),
+  amount REAL NOT NULL DEFAULT 0,
+  method TEXT NOT NULL DEFAULT 'BANK',
+  reference_no TEXT NOT NULL DEFAULT '',
+  payment_journal_id INTEGER REFERENCES journal_entries(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(company_id, payment_no)
+);
+
+CREATE TABLE IF NOT EXISTS expenditure_control_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  expected_value REAL NOT NULL DEFAULT 0,
+  actual_value REAL NOT NULL DEFAULT 0,
+  difference REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'DONE',
+  operator_id INTEGER REFERENCES users(id),
+  operator_role TEXT NOT NULL DEFAULT '',
+  checked_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  note TEXT NULL,
+  UNIQUE(company_id, period, kind)
 );
 `

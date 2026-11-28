@@ -34,19 +34,29 @@ describe('Db.bootstrap', () => {
     expect(names).toContain('payroll_periods')
     expect(names).toContain('payroll_runs')
     expect(names).toContain('payroll_documents')
+    expect(names).toContain('revenue_customers')
+    expect(names).toContain('revenue_orders')
+    expect(names).toContain('revenue_invoices')
+    expect(names).toContain('revenue_receipts')
+    expect(names).toContain('purchase_suppliers')
+    expect(names).toContain('purchase_requisitions')
+    expect(names).toContain('purchase_orders')
+    expect(names).toContain('purchase_goods_receipts')
+    expect(names).toContain('purchase_bills')
+    expect(names).toContain('purchase_payments')
     expect(names).not.toContain('import_batches')
     expect(names).not.toContain('journal_templates')
     expect(names).not.toContain('music_tracks')
   })
 
-  it('menyemai enam akun penggajian dan 12 periode', () => {
+  it('menyemai empat belas akun dan 12 periode', () => {
     const db = Db.open(dbFile)
     db.bootstrap(1, 'PT Uji', 'Operator Uji')
     const accounts = db.connection.query('SELECT COUNT(*) AS c FROM accounts').get() as { c: number }
     const periods = db.connection
       .query('SELECT COUNT(*) AS c FROM accounting_periods')
       .get() as { c: number }
-    expect(accounts.c).toBe(6)
+    expect(accounts.c).toBe(14)
     expect(periods.c).toBe(12)
   })
 
@@ -58,13 +68,16 @@ describe('Db.bootstrap', () => {
       name: string
       role: string
     }[]
-    expect(users.length).toBe(6)
+    expect(users.length).toBe(9)
     expect(users.some((user) => user.role === 'ADMIN')).toBe(true)
     expect(users.some((user) => user.role === 'SDM')).toBe(true)
     expect(users.some((user) => user.role === 'PENGGAJIAN')).toBe(true)
     expect(users.some((user) => user.role === 'KEUANGAN')).toBe(true)
     expect(users.some((user) => user.role === 'AKUNTANSI')).toBe(true)
     expect(users.some((user) => user.role === 'SDM_MANAGER')).toBe(true)
+    expect(users.some((user) => user.role === 'PENJUALAN')).toBe(true)
+    expect(users.some((user) => user.role === 'GUDANG')).toBe(true)
+    expect(users.some((user) => user.role === 'PEMBELIAN')).toBe(true)
 
     // Pemanggilan kedua tidak menggandakan apa pun.
     db.bootstrap(1, 'PT Uji', 'Operator Uji')
@@ -72,8 +85,8 @@ describe('Db.bootstrap', () => {
     const accountsAgain = db.connection.query('SELECT COUNT(*) AS c FROM accounts').get() as {
       c: number
     }
-    expect(usersAgain.c).toBe(6)
-    expect(accountsAgain.c).toBe(6)
+    expect(usersAgain.c).toBe(9)
+    expect(accountsAgain.c).toBe(14)
   })
   it('menambahkan kolom lembur harian pada database lama tanpa menghapus data', () => {
     const legacyFile = path.join(tmpDir, 'legacy-payroll.sqlite')
@@ -151,7 +164,7 @@ describe('Db.clean', () => {
     const periods = db.connection
       .query('SELECT COUNT(*) AS c FROM accounting_periods')
       .get() as { c: number }
-    expect(accounts.c).toBe(6)
+    expect(accounts.c).toBe(14)
     expect(employees.c).toBe(1)
     expect(periods.c).toBe(12)
   })

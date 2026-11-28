@@ -1,7 +1,30 @@
 import React from 'react'
-import { LogOut, Users } from 'lucide-react'
+import { LogOut, ShoppingBag, ShoppingCart, Users } from 'lucide-react'
 
-export function AppShell({ company, user, onLogout, children }) {
+// Halaman aplikasi: modul SDM (penggajian) dan dua siklus utama SIA
+// sesuai BAB V.pptx bagian B (pendapatan) dan C (pengeluaran).
+const NAV_SECTIONS = [
+  {
+    label: 'MODUL SDM',
+    items: [['payroll', 'Penggajian / SDM', Users]]
+  },
+  {
+    label: 'MODUL SIA',
+    items: [
+      ['revenue', 'Siklus Pendapatan', ShoppingBag],
+      ['expenditure', 'Siklus Pengeluaran', ShoppingCart]
+    ]
+  }
+]
+
+const PAGE_TITLES = {
+  payroll: 'Penggajian / SDM',
+  revenue: 'Siklus Pendapatan',
+  expenditure: 'Siklus Pengeluaran'
+}
+
+export function AppShell({ company, user, onLogout, page = 'payroll', onPageChange = () => {}, children }) {
+  const activeTitle = PAGE_TITLES[page] || 'Penggajian / SDM'
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Menu Aplikasi">
@@ -9,16 +32,28 @@ export function AppShell({ company, user, onLogout, children }) {
           <span className="brand-mark" aria-hidden="true">
             <img src="/favicon.png" alt="" />
           </span>
-          <span className="brand-copy"><strong>Finova</strong><small>Sistem penggajian</small></span>
+          <span className="brand-copy"><strong>Finova</strong><small>Sistem akuntansi</small></span>
         </div>
         <div className="company-label">{company?.name || 'Perusahaan'}</div>
-        <div className="nav-section-label">MODUL SDM</div>
-        <div className="nav-list">
-          <div className="nav-item active" aria-current="page">
-            <Users aria-hidden="true" />
-            <span>Penggajian / SDM</span>
-          </div>
-        </div>
+        {NAV_SECTIONS.map((section) => (
+          <React.Fragment key={section.label}>
+            <div className="nav-section-label">{section.label}</div>
+            <div className="nav-list">
+              {section.items.map(([key, label, Icon]) => (
+                <button
+                  type="button"
+                  key={key}
+                  className={`nav-item ${page === key ? 'active' : ''}`}
+                  aria-current={page === key ? 'page' : undefined}
+                  onClick={() => onPageChange(key)}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </React.Fragment>
+        ))}
         {user && <div className="user-panel">
           <span className="user-panel-name">{user.name}</span>
           <span className="user-panel-role">{user.role}</span>
@@ -31,8 +66,8 @@ export function AppShell({ company, user, onLogout, children }) {
       <main className="main">
         <header className="topbar">
           <div className="breadcrumb">
-            Sistem Penggajian
-            <strong>Penggajian / SDM</strong>
+            Sistem Akuntansi
+            <strong>{activeTitle}</strong>
           </div>
         </header>
 

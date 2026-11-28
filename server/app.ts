@@ -16,6 +16,8 @@ import { createAuthManager } from './auth'
 import { accountsRoutes } from './routes/accounts'
 import { authRoutes } from './routes/auth'
 import { payrollRoutes } from './routes/payroll'
+import { revenueRoutes } from './routes/revenue'
+import { expenditureRoutes } from './routes/expenditure'
 
 export type ServerHandle = ReturnType<typeof Bun.serve>
 
@@ -63,7 +65,9 @@ export function createFinovaApp(overrides: AppOverrides = {}): FinovaApp {
       })],
     ...authRoutes(auth),
     ...accountsRoutes(state),
-    ...payrollRoutes(state)
+    ...payrollRoutes(state),
+    ...revenueRoutes(state),
+    ...expenditureRoutes(state)
   ] as Array<[string, string, (ctx: any) => Response | Promise<Response>]>) {
     router.add(method, pattern, handler)
   }

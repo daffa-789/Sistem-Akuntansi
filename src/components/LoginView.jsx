@@ -4,14 +4,18 @@ import { Button } from './ui/Button.jsx'
 import { request } from '../api.js'
 
 // Sama dengan DEMO_USERS di server/auth.ts. Sandi demo dipakai bersama agar
-// pengguna bisa mencoba setiap peran dalam pemisahan tugas BAB V.pptx.
+// pengguna bisa mencoba setiap peran dalam pemisahan tugas BAB V.pptx
+// (SDM/penggajian, penjualan, gudang, penagihan, kas, dan pengadaan).
 const DEMO_ACCOUNTS = [
   ['Administrator', 'admin@finova.local', 'ADMIN'],
   ['Bagian SDM', 'sdm@finova.local', 'SDM'],
   ['Bagian Penggajian', 'penggajian@finova.local', 'PENGGAJIAN'],
   ['Bagian Akuntansi', 'akuntansi@finova.local', 'AKUNTANSI'],
   ['Bagian Keuangan', 'keuangan@finova.local', 'KEUANGAN'],
-  ['Manajer SDM', 'manajer-sdm@finova.local', 'SDM_MANAGER']
+  ['Manajer SDM', 'manajer-sdm@finova.local', 'SDM_MANAGER'],
+  ['Bagian Penjualan', 'penjualan@finova.local', 'PENJUALAN'],
+  ['Bagian Gudang', 'gudang@finova.local', 'GUDANG'],
+  ['Bagian Pembelian', 'pembelian@finova.local', 'PEMBELIAN']
 ]
 const DEMO_PASSWORD = 'finova2026'
 
