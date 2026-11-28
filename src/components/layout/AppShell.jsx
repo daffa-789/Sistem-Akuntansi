@@ -1,21 +1,18 @@
-import React from 'react'
-import { LogOut, ShoppingBag, ShoppingCart, Users } from 'lucide-react'
+import React, { useState } from 'react'
+import { ChevronDown, LogOut, ShoppingBag, ShoppingCart, Users } from 'lucide-react'
+import { PAYROLL_VIEWS } from '../views/PayrollCycleView.jsx'
+import { REVENUE_VIEWS } from '../views/RevenueCycleView.jsx'
+import { EXPENDITURE_VIEWS } from '../views/ExpenditureCycleView.jsx'
 
-// Halaman aplikasi: modul SDM (penggajian) dan dua siklus utama SIA
-// sesuai BAB V.pptx bagian B (pendapatan) dan C (pengeluaran).
-const NAV_SECTIONS = [
-  {
-    label: 'MODUL SDM',
-    items: [['payroll', 'Penggajian / SDM', Users]]
-  },
-  {
-    label: 'MODUL SIA',
-    items: [
-      ['revenue', 'Siklus Pendapatan', ShoppingBag],
-      ['expenditure', 'Siklus Pengeluaran', ShoppingCart]
-    ]
-  }
-]
+// Modul: tombol induk sidebar yang bisa dibuka (dropdown) menampilkan
+// bagian-bagian siklusnya langsung dari BAB V.pptx.
+const MODULES = {
+  payroll: { title: 'Penggajian / SDM', icon: Users, views: PAYROLL_VIEWS },
+  revenue: { title: 'Siklus Pendapatan', icon: ShoppingBag, views: REVENUE_VIEWS },
+  expenditure: { title: 'Siklus Pengeluaran', icon: ShoppingCart, views: EXPENDITURE_VIEWS }
+}
+
+const NAV_MODULES = ['payroll', 'revenue', 'expenditure']
 
 const PAGE_TITLES = {
   payroll: 'Penggajian / SDM',
@@ -23,37 +20,73 @@ const PAGE_TITLES = {
   expenditure: 'Siklus Pengeluaran'
 }
 
-export function AppShell({ company, user, onLogout, page = 'payroll', onPageChange = () => {}, children }) {
-  const activeTitle = PAGE_TITLES[page] || 'Penggajian / SDM'
+export function AppShell({
+  user,
+  onLogout,
+  page = 'payroll',
+  view = 'summary',
+  onNavigate = () => {},
+  children
+}) {
+  const [expanded, setExpanded] = useState({ payroll: true })
+
+  function toggleModule(moduleKey) {
+    if (page !== moduleKey) {
+      onNavigate(moduleKey, 'summary')
+      setExpanded((current) => ({ ...current, [moduleKey]: true }))
+      return
+    }
+    setExpanded((current) => ({ ...current, [moduleKey]: !current[moduleKey] }))
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Menu Aplikasi">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <img src="/favicon.png" alt="" />
-          </span>
-          <span className="brand-copy"><strong>Finova</strong><small>Sistem akuntansi</small></span>
+          <span className="brand-copy"><strong>Finova</strong></span>
         </div>
-        <div className="company-label">{company?.name || 'Perusahaan'}</div>
-        {NAV_SECTIONS.map((section) => (
-          <React.Fragment key={section.label}>
-            <div className="nav-section-label">{section.label}</div>
-            <div className="nav-list">
-              {section.items.map(([key, label, Icon]) => (
+        <div className="sidebar-nav">
+          {NAV_MODULES.map((moduleKey) => {
+            const module = MODULES[moduleKey]
+            const Icon = module.icon
+            const isOpen = Boolean(expanded[moduleKey])
+            return (
+              <div className="nav-list" key={moduleKey}>
                 <button
                   type="button"
-                  key={key}
-                  className={`nav-item ${page === key ? 'active' : ''}`}
-                  aria-current={page === key ? 'page' : undefined}
-                  onClick={() => onPageChange(key)}
+                  className={`nav-item nav-module ${page === moduleKey ? 'active' : ''}`}
+                  aria-current={page === moduleKey ? 'page' : undefined}
+                  aria-expanded={isOpen}
+                  onClick={() => toggleModule(moduleKey)}
                 >
                   <Icon aria-hidden="true" />
-                  <span>{label}</span>
+                  <span>{module.title}</span>
+                  <ChevronDown
+                    size={14}
+                    aria-hidden="true"
+                    className={`nav-chevron ${isOpen ? 'is-open' : ''}`}
+                  />
                 </button>
-              ))}
-            </div>
-          </React.Fragment>
-        ))}
+                {isOpen && (
+                  <div className="nav-sub" role="list">
+                    {module.views.map(([viewKey, label, ViewIcon]) => (
+                      <button
+                        type="button"
+                        role="listitem"
+                        key={viewKey}
+                        className={`nav-sub-item ${page === moduleKey && view === viewKey ? 'active' : ''}`}
+                        onClick={() => onNavigate(moduleKey, viewKey)}
+                      >
+                        {ViewIcon && <ViewIcon size={13} aria-hidden="true" />}
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
         {user && <div className="user-panel">
           <span className="user-panel-name">{user.name}</span>
           <span className="user-panel-role">{user.role}</span>
@@ -64,13 +97,6 @@ export function AppShell({ company, user, onLogout, page = 'payroll', onPageChan
       </aside>
 
       <main className="main">
-        <header className="topbar">
-          <div className="breadcrumb">
-            Sistem Akuntansi
-            <strong>{activeTitle}</strong>
-          </div>
-        </header>
-
         <div className="content">{children}</div>
       </main>
     </div>

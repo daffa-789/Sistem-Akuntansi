@@ -12,6 +12,12 @@ import { request } from './api.js'
 function Workspace({ user, onLogout }) {
   const [toast, setToast] = useState(null)
   const [page, setPage] = useState('payroll')
+  // Tab aktif disimpan per modul: sidebar dan tab dalam halaman tetap sinkron.
+  const [viewsByPage, setViewsByPage] = useState({
+    payroll: 'summary',
+    revenue: 'summary',
+    expenditure: 'summary'
+  })
   const companyState = useLoad(() => request('/company'), [])
 
   const notify = useCallback((message, isError = false) => {
@@ -19,26 +25,40 @@ function Workspace({ user, onLogout }) {
     window.setTimeout(() => setToast(null), 4000)
   }, [])
 
+  const navigate = useCallback((nextPage, nextView) => {
+    setPage(nextPage)
+    if (nextView) {
+      setViewsByPage((current) => ({ ...current, [nextPage]: nextView }))
+    }
+  }, [])
+
+  const handleViewChange = useCallback(
+    (nextView) => navigate(page, nextView),
+    [navigate, page]
+  )
+
   if (companyState.loading) {
     return <PageLoading message="Menyiapkan data akuntansi…" />
   }
 
+  const activeView = viewsByPage[page] || 'summary'
+
   return (
     <AppShell
-      company={companyState.data?.company}
       user={user}
       onLogout={onLogout}
       page={page}
-      onPageChange={setPage}
+      view={activeView}
+      onNavigate={navigate}
     >
       {companyState.error ? (
         <ErrorNotice error={companyState.error} />
       ) : page === 'revenue' ? (
-        <RevenueCycleView notify={notify} user={user} />
+        <RevenueCycleView notify={notify} user={user} view={activeView} onViewChange={handleViewChange} />
       ) : page === 'expenditure' ? (
-        <ExpenditureCycleView notify={notify} user={user} />
+        <ExpenditureCycleView notify={notify} user={user} view={activeView} onViewChange={handleViewChange} />
       ) : (
-        <PayrollCycleView notify={notify} user={user} />
+        <PayrollCycleView notify={notify} user={user} view={activeView} onViewChange={handleViewChange} />
       )}
 
       {toast && (

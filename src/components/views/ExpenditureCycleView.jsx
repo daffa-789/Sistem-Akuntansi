@@ -19,7 +19,7 @@ import { Modal } from '../ui/Modal.jsx'
 import { ErrorNotice } from '../ui/ErrorNotice.jsx'
 import { money } from '../../utils/formatters.js'
 import { request } from '../../api.js'
-import { CycleEmpty, CycleIntro, CycleMetric, CycleStatus, CycleTabs, todayISO } from './CyclePrimitives.jsx'
+import { CycleEmpty, CycleMetric, CycleStatus, todayISO } from './CyclePrimitives.jsx'
 
 // Susunan tab mengikuti BAB V.pptx bagian C (Siklus Pengeluaran).
 const VIEWS = [
@@ -31,6 +31,8 @@ const VIEWS = [
   ['journal', 'Jurnal', Landmark],
   ['controls', 'Pengendalian', ShieldCheck]
 ]
+export const EXPENDITURE_VIEWS = VIEWS
+
 
 const SUPPLIER_CATEGORIES = [
   ['BAHAN_BAKU', 'Bahan baku'],
@@ -217,9 +219,14 @@ function JournalList({ entries, limit }) {
 // Fungsi default harus stabil: efek periodik bergantung pada prop ini.
 const NOOP = () => {}
 
-export function ExpenditureCycleView({ notify = NOOP, user = null }) {
-  const [view, setView] = useState('summary')
-  const [company, setCompany] = useState(null)
+export function ExpenditureCycleView({ notify = NOOP, user = null, view: controlledView, onViewChange = null }) {
+  const [internalView, setInternalView] = useState('summary')
+  // Tab bisa dikendalikan dari sidebar (AppShell); tanpa prop, tetap mandiri.
+  const view = controlledView ?? internalView
+  const setView = (next) => {
+    setInternalView(next)
+    onViewChange?.(next)
+  }
   const [suppliers, setSuppliers] = useState([])
   const [requisitions, setRequisitions] = useState([])
   const [orders, setOrders] = useState([])
@@ -245,9 +252,8 @@ export function ExpenditureCycleView({ notify = NOOP, user = null }) {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [companyResult, supplierResult, requisitionResult, orderResult, receiptResult, billResult, paymentResult, journalResult] =
+    const [supplierResult, requisitionResult, orderResult, receiptResult, billResult, paymentResult, journalResult] =
       await Promise.allSettled([
-        request('/api/company'),
         request('/api/expenditure/suppliers'),
         request('/api/expenditure/requisitions'),
         request('/api/expenditure/orders'),
@@ -257,7 +263,6 @@ export function ExpenditureCycleView({ notify = NOOP, user = null }) {
         fetchExpenditureJournals()
       ])
     const failures = []
-    if (companyResult.status === 'fulfilled') setCompany(companyResult.value?.company || null)
     if (supplierResult.status === 'fulfilled') setSuppliers(supplierResult.value?.suppliers || [])
     else failures.push(`Data pemasok: ${supplierResult.reason?.message || 'gagal dimuat.'} Pastikan server Finova sudah berjalan.`)
     if (requisitionResult.status === 'fulfilled') setRequisitions(requisitionResult.value?.requisitions || [])
@@ -627,22 +632,13 @@ export function ExpenditureCycleView({ notify = NOOP, user = null }) {
 
   return (
     <>
-      <CycleIntro
-        number="02"
-        title="Siklus Pengeluaran"
-        description="Alur pengadaan kebutuhan kafe maid: permintaan pembelian, persetujuan manajer, pesanan pembelian kepada pemasok (kopi, bahan kue, kostum maid), penerimaan barang, pencatatan utang dengan pencocokan tiga arah, dan pembayaran sesuai BAB V Sistem Informasi Akuntansi."
-        companyName={company?.name || 'Maid Caffe Finova'}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setSupplierModal(emptySupplier())}><Truck size={15} /> Tambah pemasok</Button>
-            <Button onClick={() => setRequisitionModal(emptyRequisition())}><Plus size={15} /> Permintaan pembelian</Button>
-          </>
-        }
-      />
-      <CycleTabs value={view} items={VIEWS} onChange={setView} />
       <div className="cycle-page-label">
         <span>{VIEWS.find(([key]) => key === view)?.[1]}</span>
         <span>{suppliers.length} pemasok <i>·</i> {requisitions.length} permintaan <i>·</i> {openOrders.length} PO aktif <i>·</i> {monthLabel(month)}</span>
+        <span className="cycle-inline-actions">
+          <Button small variant="secondary" onClick={() => setSupplierModal(emptySupplier())}><Truck size={14} /> Tambah pemasok</Button>
+          <Button small onClick={() => setRequisitionModal(emptyRequisition())}><Plus size={14} /> Permintaan pembelian</Button>
+        </span>
       </div>
 
       <ErrorNotice error={loadError} />
@@ -669,7 +665,7 @@ export function ExpenditureCycleView({ notify = NOOP, user = null }) {
           </section>
 
           <section className="panel cycle-card">
-            <div className="cycle-card-heading"><div><h2>Tujuan & dokumen siklus</h2><p>Bagian C BAB V.</p></div><BookOpen size={18} /></div>
+            <div className="cycle-card-heading"><div><h2>Tujuan & dokumen siklus</h2><p>Tujuan siklus dan dokumen yang dibentuk otomatis dari transaksi.</p></div><BookOpen size={18} /></div>
             <ul className="cycle-goal-list">
               {EXPENDITURE_GOALS.map((goal) => <li key={goal}>{goal}</li>)}
             </ul>
@@ -711,7 +707,7 @@ export function ExpenditureCycleView({ notify = NOOP, user = null }) {
           <label className="cycle-search"><span className="sr-only">Cari pemasok</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kode, nama, atau kategori" /></label>
           <Button small onClick={() => setSupplierModal(emptySupplier())}><Plus size={15} /> Tambah pemasok</Button>
         </div>
-        {untrustedSuppliers.length > 0 && <div className="cycle-form-hint" style={{ color: '#8a5a2b' }}>{untrustedSuppliers.length} pemasok belum ditandai terpercaya; pengendalian BAB V menyarankan pemilihan pemasok yang dapat dipercaya.</div>}
+        {untrustedSuppliers.length > 0 && <div className="cycle-form-hint" style={{ color: '#8a5a2b' }}>{untrustedSuppliers.length} pemasok belum ditandai terpercaya; pengendalian internal menyarankan pemilihan pemasok yang dapat dipercaya.</div>}
         <div className="cycle-table-wrap"><table className="cycle-table">
           <thead><tr><th>Kode</th><th>Nama</th><th>Kategori</th><th>Kontak</th><th>Kepercayaan</th><th>Status</th><th /></tr></thead>
           <tbody>
@@ -877,28 +873,12 @@ export function ExpenditureCycleView({ notify = NOOP, user = null }) {
           <div className="cycle-card-heading"><div><h2>Jurnal siklus pengeluaran</h2><p>Faktur pemasok: debit Beban, kredit Utang Usaha; pembayaran: debit Utang, kredit Kas/Bank.</p></div><Landmark size={18} /></div>
           <JournalList entries={journals} />
         </section>
-        <section className="panel cycle-card" style={{ marginTop: 16 }}>
-          <div className="cycle-card-heading"><div><h2>Contoh jurnal pada BAB V</h2><p>Pembelian bahan kopi Rp1.000.000 kemudian dibayar transfer.</p></div><BookOpen size={18} /></div>
-          <div className="cycle-two-column">
-            <div>
-              <p className="cycle-form-intro">Pencatatan utang pemasok</p>
-              <DetailRow label="Beban Bahan" note="Debit" value={1_000_000} />
-              <DetailRow label="Utang Usaha" note="Kredit" value={1_000_000} />
-            </div>
-            <div>
-              <p className="cycle-form-intro">Pembayaran pemasok</p>
-              <DetailRow label="Utang Usaha" note="Debit" value={1_000_000} />
-              <DetailRow label="Kas / Bank" note="Kredit" value={1_000_000} />
-            </div>
-          </div>
-          <p className="cycle-form-hint">Pada sistem ini utang usaha memakai akun 2120 dan beban mengikuti kategori pemasok: 5100 bahan, 5300 utilitas, 5400 kostum, 5500 jasa.</p>
-        </section>
       </>}
 
       {!loading && view === 'controls' && <>
         <div className="cycle-two-column">
           <section className="panel cycle-card">
-            <div className="cycle-card-heading"><div><h2>Pengendalian internal pengeluaran</h2><p>Bagian C BAB V: persetujuan, pemasok terpercaya, pemeriksaan, pencocokan, akses kas.</p></div><ShieldCheck size={18} /></div>
+            <div className="cycle-card-heading"><div><h2>Pengendalian internal pengeluaran</h2><p>Persetujuan pembelian, pemasok terpercaya, pemeriksaan barang, pencocokan dokumen, dan pembatasan akses kas.</p></div><ShieldCheck size={18} /></div>
             {CONTROL_DUTIES.map(([role, note], index) => (
               <div className="cycle-check-row" key={role}>
                 <span className="cycle-check-mark">{String(index + 1).padStart(2, '0')}</span>
@@ -989,7 +969,6 @@ export function ExpenditureCycleView({ notify = NOOP, user = null }) {
         </section>
       </>}
 
-      <div className="cycle-footnote"><FileText size={14} /><span>Seluruh data berasal dari API Finova. Dokumen siklus pengeluaran (PR, PO, LPB, faktur pemasok, BKK, bukti transfer, catatan utang) dibentuk otomatis dari transaksi.</span></div>
 
       {supplierModal && <Modal
         title={supplierModal.id ? 'Ubah pemasok' : 'Tambah pemasok'}

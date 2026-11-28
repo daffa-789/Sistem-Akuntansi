@@ -26,7 +26,7 @@ import { Modal } from '../ui/Modal.jsx'
 import { ErrorNotice } from '../ui/ErrorNotice.jsx'
 import { money } from '../../utils/formatters.js'
 import { request } from '../../api.js'
-import { CycleEmpty, CycleIntro, CycleMetric, CycleStatus, CycleTabs, todayISO } from './CyclePrimitives.jsx'
+import { CycleEmpty, CycleMetric, CycleStatus, todayISO } from './CyclePrimitives.jsx'
 
 // Susunan tab mengikuti BAB V.pptx bagian E (Sistem Penggajian / SDM).
 const VIEWS = [
@@ -38,6 +38,8 @@ const VIEWS = [
   ['journal', 'Jurnal', FileText],
   ['controls', 'Pengendalian', ShieldCheck]
 ]
+export const PAYROLL_VIEWS = VIEWS
+
 const PTKP_FALLBACK = ['TK0', 'TK1', 'TK2', 'TK3', 'K0', 'K1', 'K2', 'K3']
 const NUMERIC_FIELDS = ['basic_salary', 'fixed_allowance', 'jkk_risk_class', 'family_members']
 const NULLABLE_FIELDS = ['exit_date', 'npwp', 'bank_name', 'bank_account']
@@ -78,6 +80,17 @@ const CONTROL_DUTIES = [
   ['Penggajian', 'Menghitung gaji kotor, potongan, dan gaji bersih.'],
   ['Pembayaran', 'Memverifikasi penerima, membayar, dan merekonsiliasi dengan bank.']
 ]
+
+// Struktur kerja kafe maid: Maid adalah pelayan khas kafe maid — menerima
+// pesanan, menyajikan, dan berinteraksi dengan tamu. Butler adalah pelayan
+// pria pendamping maid. Barista dan dapur dipisah karena keahliannya berbeda.
+const DEPARTMENT_ROLES = {
+  Pelayanan: ['Maid', 'Butler', 'Waiter', 'Maid Senior'],
+  Barista: ['Barista', 'Head Barista'],
+  Dapur: ['Koki', 'Asisten Dapur'],
+  Kasir: ['Kasir'],
+  Manajemen: ['Manajer Kafe', 'Supervisor']
+}
 
 function periodLabel(period) {
   const date = new Date(String(period || '') + '-15T12:00:00')
@@ -246,10 +259,15 @@ function JournalList({ entries, limit }) {
 // Fungsi default harus stabil: efek periodik bergantung pada prop ini.
 const NOOP = () => {}
 
-export function PayrollCycleView({ notify = NOOP, user = null }) {
-  const [view, setView] = useState('summary')
+export function PayrollCycleView({ notify = NOOP, user = null, view: controlledView, onViewChange = null }) {
+  const [internalView, setInternalView] = useState('summary')
+  // Tab bisa dikendalikan dari sidebar (AppShell); tanpa prop, tetap mandiri.
+  const view = controlledView ?? internalView
+  const setView = (next) => {
+    setInternalView(next)
+    onViewChange?.(next)
+  }
   const [employees, setEmployees] = useState([])
-  const [company, setCompany] = useState(null)
   const [periods, setPeriods] = useState([])
   const [parameters, setParameters] = useState(null)
   const [journals, setJournals] = useState([])
@@ -279,8 +297,7 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [companyResult, employeeResult, periodResult, parameterResult, journalResult, requestResult] = await Promise.allSettled([
-      request('/api/company'),
+    const [employeeResult, periodResult, parameterResult, journalResult, requestResult] = await Promise.allSettled([
       request('/api/payroll/employees'),
       request('/api/payroll/periods'),
       request('/api/payroll/parameters'),
@@ -288,7 +305,6 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
       request('/api/payroll/change-requests')
     ])
     const failures = []
-    if (companyResult.status === 'fulfilled') setCompany(companyResult.value?.company || null)
     if (employeeResult.status === 'fulfilled') {
       setEmployees(employeeResult.value?.employees || [])
     } else {
@@ -426,6 +442,15 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
 
   function patchEmployee(key, value) {
     setEmployeeModal((current) => ({ ...current, [key]: value }))
+  }
+
+  /** Ganti bagian: jabatan diisi ulang sesuai daftar jabatan bagian tersebut. */
+  function patchDepartment(value) {
+    setEmployeeModal((current) => {
+      const roles = DEPARTMENT_ROLES[value] || []
+      const keep = roles.includes(current.position)
+      return { ...current, department: value, position: keep ? current.position : (roles[0] || '') }
+    })
   }
 
   async function saveEmployee(event) {
@@ -723,17 +748,13 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
 
   return (
     <>
-      <CycleIntro
-        number="04"
-        title="Siklus Penggajian / SDM"
-        description="Mengelola data karyawan, kehadiran, perhitungan gaji, pembayaran, pencatatan akuntansi, dokumen, dan pengendalian internal sesuai BAB V Sistem Informasi Akuntansi."
-        companyName={company?.name || 'PT Finova Akuntansi Indonesia'}
-        actions={<><Button variant="secondary" onClick={openPeriodModal}><CalendarDays size={15} /> Tambah periode</Button><Button onClick={() => openEmployeeModal(null)}><Plus size={15} /> Tambah karyawan</Button></>}
-      />
-      <CycleTabs value={view} items={VIEWS} onChange={setView} />
       <div className="cycle-page-label">
         <span>{VIEWS.find(([key]) => key === view)?.[1]}</span>
         <span>{activeCount} karyawan aktif <i>·</i> {periods.length} periode {activePeriod ? <><i>·</i> {periodLabel(activePeriod.period)}</> : null}</span>
+        <span className="cycle-inline-actions">
+          <Button small variant="secondary" onClick={openPeriodModal}><CalendarDays size={14} /> Tambah periode</Button>
+          <Button small onClick={() => openEmployeeModal(null)}><Plus size={14} /> Tambah karyawan</Button>
+        </span>
       </div>
 
       <ErrorNotice error={loadError} />
@@ -749,7 +770,7 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
 
         <div className="cycle-two-column">
           <section className="panel cycle-card">
-            <div className="cycle-card-heading"><div><h2>Lima aktivitas siklus penggajian</h2><p>Alur dari data karyawan sampai pencatatan akuntansi (slide 27).</p></div><ClipboardList size={18} /></div>
+            <div className="cycle-card-heading"><div><h2>Lima aktivitas siklus penggajian</h2><p>Alur dari data karyawan sampai pencatatan akuntansi.</p></div><ClipboardList size={18} /></div>
             {ACTIVITY_STEPS.map(([title, note, role], index) => (
               <div className="cycle-check-row" key={title}>
                 <span className="cycle-check-mark">{String(index + 1).padStart(2, '0')}</span>
@@ -760,7 +781,7 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
           </section>
 
           <section className="panel cycle-card">
-            <div className="cycle-card-heading"><div><h2>Tujuan & komponen perhitungan</h2><p>Slide 26 dan slide 28 BAB V.</p></div><Calculator size={18} /></div>
+            <div className="cycle-card-heading"><div><h2>Tujuan & komponen perhitungan</h2><p>Tujuan siklus dan komponen perhitungan gaji.</p></div><Calculator size={18} /></div>
             <ul className="cycle-goal-list">
               {PAYROLL_GOALS.map((goal) => <li key={goal}>{goal}</li>)}
             </ul>
@@ -796,7 +817,7 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
 
       {!loading && view === 'employees' && <>
         <section className="panel cycle-card" style={{ marginBottom: 16 }}>
-          <div className="cycle-card-heading"><div><h2>Persetujuan perubahan data karyawan</h2><p>Slide 30: perubahan data karyawan dan gaji harus mendapat persetujuan sebelum periode disetujui.</p></div><ShieldCheck size={18} /></div>
+          <div className="cycle-card-heading"><div><h2>Persetujuan perubahan data karyawan</h2><p>Perubahan data karyawan dan gaji harus mendapat persetujuan sebelum periode disetujui.</p></div><ShieldCheck size={18} /></div>
           {pendingRequests.length ? pendingRequests.map((request) => (
             <div className="cycle-check-row" key={request.id}>
               <span className="cycle-check-mark">PR</span>
@@ -912,7 +933,7 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
       {!loading && view === 'documents' && <>
         {!activePeriod ? <section className="panel panel-tight cycle-table-panel"><CycleEmpty>Buat periode terlebih dahulu untuk mengelola dokumen penggajian.</CycleEmpty></section> : <section className="panel panel-tight cycle-table-panel">
           <div className="cycle-table-heading">
-            <div><h2>Dokumen periode {periodLabel(activePeriod.period)}</h2><p>Delapan dokumen siklus penggajian sesuai slide 28 BAB V.pptx. {verifiedDocuments} dari {documents.length || 8} sudah terverifikasi.</p></div>
+            <div><h2>Dokumen periode {periodLabel(activePeriod.period)}</h2><p>Delapan dokumen siklus penggajian. {verifiedDocuments} dari {documents.length || 8} sudah terverifikasi.</p></div>
           </div>
           <div className="cycle-table-wrap"><table className="cycle-table">
             <thead><tr><th>No</th><th>Dokumen</th><th>Nomor referensi</th><th>Tanggal</th><th>Berkas</th><th>Status</th><th /></tr></thead>
@@ -957,23 +978,6 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
           <div className="cycle-card-heading"><div><h2>Jurnal payroll</h2><p>Jurnal akrual dibuat saat periode disetujui; jurnal pembayaran dibuat saat gaji dibayar.</p></div><FileText size={18} /></div>
           <JournalList entries={journals} />
         </section>
-        <section className="panel cycle-card" style={{ marginTop: 16 }}>
-          <div className="cycle-card-heading"><div><h2>Contoh jurnal pada BAB V</h2><p>Gaji dan tunjangan bruto Rp5.000.000, potongan Rp500.000, gaji bersih Rp4.500.000.</p></div><BookOpen size={18} /></div>
-          <div className="cycle-two-column">
-            <div>
-              <p className="cycle-form-intro">Pengakuan beban dan utang gaji</p>
-              <DetailRow label="Beban Gaji" note="Debit" value={5_000_000} />
-              <DetailRow label="Utang Potongan Gaji" note="Kredit" value={500_000} />
-              <DetailRow label="Utang Gaji" note="Kredit" value={4_500_000} />
-            </div>
-            <div>
-              <p className="cycle-form-intro">Pembayaran gaji bersih</p>
-              <DetailRow label="Utang Gaji" note="Debit" value={4_500_000} />
-              <DetailRow label="Bank" note="Kredit" value={4_500_000} />
-            </div>
-          </div>
-          <p className="cycle-form-hint">Pada sistem ini “Utang Potongan Gaji” dipecah menjadi 2130 Utang BPJS, 2140 Utang PPh 21, dan 2150 Utang Potongan Lain. “Utang Gaji” memakai akun 2110 dan “Bank” memakai akun 1110.</p>
-        </section>
       </>}
 
       {!loading && view === 'controls' && <>
@@ -981,7 +985,7 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
           {!canControl && <div className="cycle-form-hint" style={{ color: '#8a5a2b' }}>Verifikasi penerima dan rekonsiliasi tersedia setelah periode disetujui, sebelum pembayaran.</div>}
           <div className="cycle-two-column">
             <section className="panel cycle-card">
-              <div className="cycle-card-heading"><div><h2>Pemisahan tugas</h2><p>Slide 30: SDM, pencatatan waktu, penggajian, dan pembayaran tidak digabung.</p></div><ShieldCheck size={18} /></div>
+              <div className="cycle-card-heading"><div><h2>Pemisahan tugas</h2><p>SDM, pencatatan waktu, penggajian, dan pembayaran tidak digabung.</p></div><ShieldCheck size={18} /></div>
               {CONTROL_DUTIES.map(([role, note], index) => (
                 <div className="cycle-check-row" key={role}>
                   <span className="cycle-check-mark">{String(index + 1).padStart(2, '0')}</span>
@@ -1007,7 +1011,7 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
           </div>
 
           <section className="panel cycle-card" style={{ marginTop: 16 }}>
-            <div className="cycle-card-heading"><div><h2>Rekonsiliasi gaji, akuntansi, dan rekening bank</h2><p>Slide 30: total gaji direkonsiliasi dengan catatan akuntansi dan rekening bank.</p></div><Landmark size={18} /></div>
+            <div className="cycle-card-heading"><div><h2>Rekonsiliasi gaji, akuntansi, dan rekening bank</h2><p>Total gaji direkonsiliasi dengan catatan akuntansi dan rekening bank.</p></div><Landmark size={18} /></div>
             <div style={{ marginBottom: 10 }}>{controlBadge(reconciliationCheck?.status)}</div>
             <div className="cycle-breakdown">
               <div>
@@ -1059,7 +1063,6 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
         onChange={onDocumentFileChange}
         aria-label="Unggah berkas dokumen"
       />
-      <div className="cycle-footnote"><FileText size={14} /><span>Seluruh data dan perhitungan berasal dari API Finova. Input dan perhitungan hanya diubah pada periode draft; dokumen masih dapat dilengkapi sampai periode dibayar.</span></div>
 
       {employeeModal && <Modal
         title={employeeModal.id ? 'Ajukan perubahan karyawan' : 'Tambah karyawan'}
@@ -1072,10 +1075,10 @@ export function PayrollCycleView({ notify = NOOP, user = null }) {
             ? 'Perubahan data karyawan dan gaji harus disetujui sebelum periode gaji disetujui. Isi alasan perubahan di bawah.'
             : 'Kode, nama, dan tanggal masuk wajib diisi. Gaji pokok dan tunjangan tetap tidak boleh negatif.'}</p>
           <div className="cycle-form-grid">
-            <label className="cycle-field"><span>Kode karyawan</span><input className="input" required maxLength={30} value={employeeModal.employee_code} onChange={(event) => patchEmployee('employee_code', event.target.value)} placeholder="AR-005" /></label>
+            <label className="cycle-field"><span>Kode karyawan</span><input className="input" required maxLength={30} value={employeeModal.employee_code} onChange={(event) => patchEmployee('employee_code', event.target.value)} placeholder="MC-001" /></label>
             <label className="cycle-field"><span>Nama karyawan</span><input className="input" required maxLength={100} value={employeeModal.name} onChange={(event) => patchEmployee('name', event.target.value)} /></label>
-            <label className="cycle-field"><span>Bagian</span><input className="input" value={employeeModal.department} onChange={(event) => patchEmployee('department', event.target.value)} placeholder="Produksi" /></label>
-            <label className="cycle-field"><span>Jabatan</span><input className="input" value={employeeModal.position} onChange={(event) => patchEmployee('position', event.target.value)} placeholder="Staf" /></label>
+            <label className="cycle-field"><span>Bagian</span><select className="input" required value={employeeModal.department} onChange={(event) => patchDepartment(event.target.value)}><option value="" disabled>Pilih bagian kerja</option>{Object.keys(DEPARTMENT_ROLES).map((department) => <option key={department} value={department}>{department}</option>)}{employeeModal.department && !Object.keys(DEPARTMENT_ROLES).includes(employeeModal.department) && <option value={employeeModal.department}>{employeeModal.department}</option>}</select></label>
+            <label className="cycle-field"><span>Jabatan</span><select className="input" required value={employeeModal.position} onChange={(event) => patchEmployee('position', event.target.value)}>{!employeeModal.department && <option value="" disabled>Pilih bagian dulu</option>}{(DEPARTMENT_ROLES[employeeModal.department] || []).map((role) => <option key={role} value={role}>{role}</option>)}{employeeModal.position && !(DEPARTMENT_ROLES[employeeModal.department] || []).includes(employeeModal.position) && <option value={employeeModal.position}>{employeeModal.position}</option>}</select></label>
             <label className="cycle-field"><span>Jenis kontrak</span><select className="input" value={employeeModal.employment_type} onChange={(event) => patchEmployee('employment_type', event.target.value)}><option value="PKWTT">PKWTT</option><option value="PKWT">PKWT</option></select></label>
             <label className="cycle-field"><span>Status karyawan</span><select className="input" value={employeeModal.status} onChange={(event) => patchEmployee('status', event.target.value)}><option value="ACTIVE">Aktif</option><option value="INACTIVE">Nonaktif</option></select></label>
             <label className="cycle-field"><span>Tanggal masuk</span><input className="input" type="date" required value={employeeModal.join_date} onChange={(event) => patchEmployee('join_date', event.target.value)} /></label>

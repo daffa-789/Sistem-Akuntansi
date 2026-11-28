@@ -51,10 +51,10 @@ export function LoginView({ onLogin }) {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={submit}>
-        <div className="login-brand"><img src="/favicon.png" alt="" /><strong>Finova</strong></div>
-        <h1>Masuk ke sistem penggajian</h1>
+        <div className="login-brand"><strong>Finova</strong></div>
+        <h1>Masuk ke Finova</h1>
         <p className="login-intro">
-          Setiap peran memiliki kewenangan berbeda sesuai pengendalian internal siklus SDM.
+          Setiap peran memiliki kewenangan berbeda sesuai pengendalian internal masing-masing modul.
         </p>
 
         <label className="cycle-field">

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { PayrollCycleView } from './PayrollCycleView.jsx'
+import { PayrollCycleView, PAYROLL_VIEWS } from './PayrollCycleView.jsx'
 
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -123,13 +123,6 @@ function flush(): Promise<void> {
   })
 }
 
-function tab(label: string): HTMLButtonElement {
-  const button = Array.from(container.querySelectorAll('[role="tab"]'))
-    .find((candidate) => candidate.textContent?.includes(label))
-  if (!button) throw new Error(`Tab "${label}" tidak ditemukan`)
-  return button as HTMLButtonElement
-}
-
 function button(label: string): HTMLButtonElement {
   const candidate = Array.from(container.querySelectorAll('button'))
     .find((item) => item.textContent?.trim() === label)
@@ -137,9 +130,12 @@ function button(label: string): HTMLButtonElement {
   return candidate as HTMLButtonElement
 }
 
+/** Navigasi antar bagian kini lewat sidebar; test me-render ulang dengan view terkontrol. */
 async function openTab(label: string): Promise<void> {
+  const entry = PAYROLL_VIEWS.find(([, title]) => title === label)
+  if (!entry) throw new Error(`Bagian "${label}" tidak ditemukan`)
   await act(async () => {
-    tab(label).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    root.render(React.createElement(PayrollCycleView, { view: entry[0] }))
   })
   await flush()
 }
@@ -233,12 +229,11 @@ describe('PayrollCycleView sesuai BAB V.pptx', () => {
     await act(async () => { root.render(React.createElement(PayrollCycleView)) })
     await flush()
 
-    expect(container.querySelectorAll('[role="tab"]').length).toBe(7)
+    expect(PAYROLL_VIEWS).toHaveLength(7)
     expect(container.textContent).toContain('Lima aktivitas siklus penggajian')
     expect(container.textContent).toContain('Pengelolaan data karyawan')
     expect(container.textContent).toContain('Pencatatan akuntansi')
     expect(container.textContent).toContain('Gaji Bersih = Gaji Bruto − Total Potongan')
-    expect(container.textContent).toContain('PT Nusantara Konsumenindo Tbk')
     expect(container.querySelector('.cycle-metric strong')?.textContent).toBe('1')
     expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith('/api/') && !String(url).startsWith('/api/api/'))).toBe(true)
   })

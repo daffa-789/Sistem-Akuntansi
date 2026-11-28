@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ExpenditureCycleView } from './ExpenditureCycleView.jsx'
+import { ExpenditureCycleView, EXPENDITURE_VIEWS } from './ExpenditureCycleView.jsx'
 
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -85,13 +85,6 @@ function flush(): Promise<void> {
   })
 }
 
-function tab(label: string): HTMLButtonElement {
-  const button = Array.from(container.querySelectorAll('[role="tab"]'))
-    .find((candidate) => candidate.textContent?.includes(label))
-  if (!button) throw new Error(`Tab "${label}" tidak ditemukan`)
-  return button as HTMLButtonElement
-}
-
 function button(label: string): HTMLButtonElement {
   const candidate = Array.from(container.querySelectorAll('button'))
     .find((item) => item.textContent?.trim() === label)
@@ -99,9 +92,12 @@ function button(label: string): HTMLButtonElement {
   return candidate as HTMLButtonElement
 }
 
+/** Navigasi antar bagian kini lewat sidebar; test me-render ulang dengan view terkontrol. */
 async function openTab(label: string): Promise<void> {
+  const entry = EXPENDITURE_VIEWS.find(([, title]) => title === label)
+  if (!entry) throw new Error(`Bagian "${label}" tidak ditemukan`)
   await act(async () => {
-    tab(label).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    root.render(React.createElement(ExpenditureCycleView, { view: entry[0] }))
   })
   await flush()
 }
@@ -239,12 +235,11 @@ describe('ExpenditureCycleView sesuai BAB V.pptx', () => {
     await act(async () => { root.render(React.createElement(ExpenditureCycleView)) })
     await flush()
 
-    expect(container.querySelectorAll('[role="tab"]').length).toBe(7)
+    expect(EXPENDITURE_VIEWS).toHaveLength(7)
     expect(container.textContent).toContain('Lima aktivitas siklus pengeluaran')
     expect(container.textContent).toContain('Permintaan pembelian')
     expect(container.textContent).toContain('Pembayaran kepada pemasok')
     expect(container.textContent).toContain('Total Biaya Pembelian = Bahan Baku + Perlengkapan + Jasa')
-    expect(container.textContent).toContain('Maid Caffe Finova')
     expect(container.querySelectorAll('.cycle-metric').length).toBe(4)
     expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith('/api/') && !String(url).startsWith('/api/api/'))).toBe(true)
   })
@@ -351,14 +346,11 @@ describe('ExpenditureCycleView sesuai BAB V.pptx', () => {
     expect(container.textContent).toContain('Lunas')
   })
 
-  it('jurnal kosong menampilkan pesan belum diposting dan contoh jurnal', async () => {
+  it('jurnal kosong menampilkan pesan belum diposting', async () => {
     await act(async () => { root.render(React.createElement(ExpenditureCycleView)) })
     await flush()
     await openTab('Jurnal')
     expect(container.textContent).toContain('Belum ada jurnal pengeluaran yang diposting.')
-    expect(container.textContent).toContain('Contoh jurnal pada BAB V')
-    expect(container.textContent).toContain('Beban Bahan')
-    expect(container.textContent).toContain('Utang Usaha')
   })
 
   it('pengendalian: pemasok belum terpercaya dan rekonsiliasi utang', async () => {

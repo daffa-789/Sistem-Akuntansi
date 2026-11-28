@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { RevenueCycleView } from './RevenueCycleView.jsx'
+import { RevenueCycleView, REVENUE_VIEWS } from './RevenueCycleView.jsx'
 
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -81,13 +81,6 @@ function flush(): Promise<void> {
   })
 }
 
-function tab(label: string): HTMLButtonElement {
-  const button = Array.from(container.querySelectorAll('[role="tab"]'))
-    .find((candidate) => candidate.textContent?.includes(label))
-  if (!button) throw new Error(`Tab "${label}" tidak ditemukan`)
-  return button as HTMLButtonElement
-}
-
 function button(label: string): HTMLButtonElement {
   const candidate = Array.from(container.querySelectorAll('button'))
     .find((item) => item.textContent?.trim() === label)
@@ -95,9 +88,12 @@ function button(label: string): HTMLButtonElement {
   return candidate as HTMLButtonElement
 }
 
+/** Navigasi antar bagian kini lewat sidebar; test me-render ulang dengan view terkontrol. */
 async function openTab(label: string): Promise<void> {
+  const entry = REVENUE_VIEWS.find(([, title]) => title === label)
+  if (!entry) throw new Error(`Bagian "${label}" tidak ditemukan`)
   await act(async () => {
-    tab(label).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    root.render(React.createElement(RevenueCycleView, { view: entry[0] }))
   })
   await flush()
 }
@@ -236,12 +232,11 @@ describe('RevenueCycleView sesuai BAB V.pptx', () => {
     await act(async () => { root.render(React.createElement(RevenueCycleView)) })
     await flush()
 
-    expect(container.querySelectorAll('[role="tab"]').length).toBe(7)
+    expect(REVENUE_VIEWS).toHaveLength(7)
     expect(container.textContent).toContain('Empat aktivitas siklus pendapatan')
     expect(container.textContent).toContain('Penerimaan pesanan pelanggan')
     expect(container.textContent).toContain('Penerimaan kas')
     expect(container.textContent).toContain('Penjualan Tunai = Kas Masuk Langsung')
-    expect(container.textContent).toContain('Maid Caffe Finova')
     expect(container.querySelectorAll('.cycle-metric').length).toBe(4)
     expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith('/api/') && !String(url).startsWith('/api/api/'))).toBe(true)
   })
@@ -356,7 +351,6 @@ describe('RevenueCycleView sesuai BAB V.pptx', () => {
     await flush()
     await openTab('Jurnal')
     expect(container.textContent).toContain('Belum ada jurnal pendapatan yang diposting.')
-    expect(container.textContent).toContain('Contoh jurnal pada BAB V')
   })
 
   it('pengendalian: pemisahan tugas, rekonsiliasi kas mismatch, dan daftar persetujuan kredit', async () => {

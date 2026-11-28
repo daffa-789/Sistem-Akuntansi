@@ -125,11 +125,13 @@ kbd { padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-widt
   position: sticky;
   top: 0;
   align-self: flex-start;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   width: var(--sidebar-w);
   flex: 0 0 auto;
   padding: 22px 14px 18px;
-  overflow-y: auto;
+  overflow: hidden;
   color: #eafaf0;
   background: linear-gradient(172deg, #04301f 0%, #0a5535 48%, #0b6b41 100%);
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, .07), 4px 0 26px rgba(4, 30, 19, .12);
@@ -139,8 +141,11 @@ kbd { padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-widt
 .brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: #075334; background: linear-gradient(160deg, #d8f8e4, #a6e9c3); box-shadow: 0 6px 18px rgba(3, 43, 29, .5), inset 0 1px 0 rgba(255, 255, 255, .6); }
 .brand-mark svg { width: 21px; }
 
-.company-label { display: flex; align-items: center; gap: 8px; padding: 0 10px 12px; margin-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, .12); color: #8fd6b1; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.1px; }
-.company-label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+.sidebar-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .24) transparent; padding-right: 2px; margin-right: -2px; }
+.sidebar-nav::-webkit-scrollbar { width: 6px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .22); border-radius: 3px; }
+.sidebar-nav::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .32); }
 
 .nav-list { display: grid; gap: 3px; }
 .nav-item { position: relative; display: flex; gap: 12px; align-items: center; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--r-md); color: #c6ecd9; text-align: left; background: transparent; font-size: 13.5px; font-weight: 500; transition: color var(--t), background var(--t), transform var(--t-fast); }
@@ -150,6 +155,18 @@ kbd { padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-widt
 .nav-item.active { color: #053a24; background: #f2fdf6; font-weight: 700; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8); }
 .nav-item.active::before { content: ""; position: absolute; left: -14px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold); }
 .nav-item.active svg { opacity: 1; }
+
+/* Dropdown modul: tombol induk + sub-menu bagian siklus. */
+.nav-module span { flex: 1; }
+.nav-chevron { margin-left: auto; width: 14px !important; height: 14px !important; opacity: .7; transition: transform var(--t-fast); }
+.nav-chevron.is-open { transform: rotate(180deg); }
+.nav-sub { display: grid; gap: 2px; margin: 2px 0 4px; padding: 2px 0 2px 26px; border-left: 1px solid rgba(255, 255, 255, .14); margin-left: 24px; transform-origin: top center; animation: nav-drop .22s cubic-bezier(.2, .7, .3, 1); }
+@keyframes nav-drop { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: translateY(0); } }
+.nav-sub-item { display: flex; gap: 8px; align-items: center; width: 100%; padding: 7px 10px; border: 0; border-radius: var(--r-sm); color: #a9d8bd; text-align: left; background: transparent; cursor: pointer; font-size: 12px; font-weight: 500; transition: color var(--t), background var(--t); }
+.nav-sub-item:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+.nav-sub-item svg { opacity: .8; }
+.nav-sub-item.active { color: #053a24; background: rgba(242, 253, 246, .92); font-weight: 700; }
+.nav-sub-item.active svg { opacity: 1; }
 
 .sidebar-bottom { margin-top: 26px; padding: 14px 12px 0; border-top: 1px solid rgba(255, 255, 255, .14); color: #a9dfc4; font-size: 11.5px; line-height: 1.6; }
 
@@ -414,9 +431,6 @@ body { background: var(--canvas); }
 .brand-mark img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 4px 12px rgba(6, 32, 23, .22); }
 .brand-copy { display: grid; gap: 1px; }
 .brand-copy strong { color: #fff; font-size: 19px; line-height: 1.1; letter-spacing: -.5px; }
-.brand-copy small { color: #9cc3ac; font-size: 10px; font-weight: 500; letter-spacing: .2px; }
-.company-label { align-items: flex-start; padding: 12px 10px; margin: 0 2px 16px; border: 1px solid rgba(224,245,229,.1); border-radius: 11px; color: #d2e6d8; background: rgba(255,255,255,.035); font-size: 10px; line-height: 1.45; letter-spacing: .2px; text-transform: none; overflow-wrap: anywhere; }
-.company-label::before { flex: 0 0 auto; margin: 5px 2px 0 0; }
 .nav-section-label { padding: 0 12px 8px; color: #8eb59e; font-size: 9px; font-weight: 800; letter-spacing: 1.15px; }
 .nav-list { gap: 5px; }
 .nav-item { min-height: 43px; padding: 10px 11px; border-radius: 11px; color: #d1e5d8; font-size: 12.5px; }
@@ -426,7 +440,7 @@ body { background: var(--canvas); }
 .user-panel {
   display: grid;
   gap: 3px;
-  margin-top: 26px;
+  margin-top: auto;
   padding: 13px 12px 11px;
   border: 1px solid rgba(224,245,229,.14);
   border-radius: 12px;
@@ -521,7 +535,7 @@ body { background: var(--canvas); }
 .cycle-tabs button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 0 12px; border: 0; border-radius: 9px; color: #65746b; background: transparent; font-size: 10.5px; font-weight: 650; white-space: nowrap; }
 .cycle-tabs button:hover { color: var(--brand-700); background: rgba(255,255,255,.7); }
 .cycle-tabs button.is-active { color: #183c2b; background: #fff; box-shadow: 0 2px 6px rgba(25,48,32,.08); }
-.cycle-page-label { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 0 11px; color: var(--ink-3); font-size: 10px; }
+.cycle-page-label { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 8px 0 14px; color: var(--ink-3); font-size: 10px; }
 .cycle-page-label > span:first-child { color: var(--ink); font-size: 12px; font-weight: 700; }
 .cycle-page-label i { padding: 0 4px; color: #b69a62; font-style: normal; }
 .cycle-metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 17px; }

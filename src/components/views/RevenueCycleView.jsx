@@ -19,7 +19,7 @@ import { Modal } from '../ui/Modal.jsx'
 import { ErrorNotice } from '../ui/ErrorNotice.jsx'
 import { money } from '../../utils/formatters.js'
 import { request } from '../../api.js'
-import { CycleEmpty, CycleIntro, CycleMetric, CycleStatus, CycleTabs, todayISO } from './CyclePrimitives.jsx'
+import { CycleEmpty, CycleMetric, CycleStatus, todayISO } from './CyclePrimitives.jsx'
 
 // Susunan tab mengikuti BAB V.pptx bagian B (Siklus Pendapatan).
 const VIEWS = [
@@ -31,6 +31,8 @@ const VIEWS = [
   ['journal', 'Jurnal', Landmark],
   ['controls', 'Pengendalian', ShieldCheck]
 ]
+export const REVENUE_VIEWS = VIEWS
+
 
 const MENU_CATEGORIES = [
   ['MINUMAN', 'Minuman'],
@@ -212,9 +214,14 @@ function JournalList({ entries, limit }) {
 // Fungsi default harus stabil: efek periodik bergantung pada prop ini.
 const NOOP = () => {}
 
-export function RevenueCycleView({ notify = NOOP, user = null }) {
-  const [view, setView] = useState('summary')
-  const [company, setCompany] = useState(null)
+export function RevenueCycleView({ notify = NOOP, user = null, view: controlledView, onViewChange = null }) {
+  const [internalView, setInternalView] = useState('summary')
+  // Tab bisa dikendalikan dari sidebar (AppShell); tanpa prop, tetap mandiri.
+  const view = controlledView ?? internalView
+  const setView = (next) => {
+    setInternalView(next)
+    onViewChange?.(next)
+  }
   const [customers, setCustomers] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [orders, setOrders] = useState([])
@@ -237,9 +244,8 @@ export function RevenueCycleView({ notify = NOOP, user = null }) {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [companyResult, customerResult, menuResult, orderResult, invoiceResult, receiptResult, journalResult] =
+    const [customerResult, menuResult, orderResult, invoiceResult, receiptResult, journalResult] =
       await Promise.allSettled([
-        request('/api/company'),
         request('/api/revenue/customers'),
         request('/api/revenue/menu-items'),
         request('/api/revenue/orders'),
@@ -248,7 +254,6 @@ export function RevenueCycleView({ notify = NOOP, user = null }) {
         fetchRevenueJournals()
       ])
     const failures = []
-    if (companyResult.status === 'fulfilled') setCompany(companyResult.value?.company || null)
     if (customerResult.status === 'fulfilled') setCustomers(customerResult.value?.customers || [])
     else failures.push(`Data pelanggan: ${customerResult.reason?.message || 'gagal dimuat.'}`)
     if (menuResult.status === 'fulfilled') setMenuItems(menuResult.value?.menu_items || [])
@@ -598,22 +603,13 @@ export function RevenueCycleView({ notify = NOOP, user = null }) {
 
   return (
     <>
-      <CycleIntro
-        number="01"
-        title="Siklus Pendapatan"
-        description="Alur pesanan pelanggan kafe maid hingga penerimaan kas: pesanan penjualan, penyajian, faktur (tunai/kredit), penerimaan kas, setoran bank, dan pengendalian internal sesuai BAB V Sistem Informasi Akuntansi."
-        companyName={company?.name || 'Maid Caffe Finova'}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setMenuModal(emptyMenu())}><UtensilsCrossed size={15} /> Tambah menu</Button>
-            <Button onClick={() => setOrderModal(emptyOrder())}><Plus size={15} /> Pesanan baru</Button>
-          </>
-        }
-      />
-      <CycleTabs value={view} items={VIEWS} onChange={setView} />
       <div className="cycle-page-label">
         <span>{VIEWS.find(([key]) => key === view)?.[1]}</span>
         <span>{customers.length} pelanggan <i>·</i> {menuItems.length} menu <i>·</i> {activeOrders.length} pesanan aktif <i>·</i> {monthLabel(month)}</span>
+        <span className="cycle-inline-actions">
+          <Button small variant="secondary" onClick={() => setMenuModal(emptyMenu())}><UtensilsCrossed size={14} /> Tambah menu</Button>
+          <Button small onClick={() => setOrderModal(emptyOrder())}><Plus size={14} /> Pesanan baru</Button>
+        </span>
       </div>
 
       <ErrorNotice error={loadError} />
@@ -629,7 +625,7 @@ export function RevenueCycleView({ notify = NOOP, user = null }) {
 
         <div className="cycle-two-column">
           <section className="panel cycle-card">
-            <div className="cycle-card-heading"><div><h2>Empat aktivitas siklus pendapatan</h2><p>Alur dari pesanan pelanggan sampai penerimaan kas (slide 9).</p></div><ClipboardList size={18} /></div>
+            <div className="cycle-card-heading"><div><h2>Empat aktivitas siklus pendapatan</h2><p>Alur dari pesanan pelanggan sampai penerimaan kas.</p></div><ClipboardList size={18} /></div>
             {ACTIVITY_STEPS.map(([title, note, role], index) => (
               <div className="cycle-check-row" key={title}>
                 <span className="cycle-check-mark">{String(index + 1).padStart(2, '0')}</span>
@@ -640,7 +636,7 @@ export function RevenueCycleView({ notify = NOOP, user = null }) {
           </section>
 
           <section className="panel cycle-card">
-            <div className="cycle-card-heading"><div><h2>Tujuan & dokumen siklus</h2><p>Slide 8 dan slide 10 BAB V.</p></div><BookOpen size={18} /></div>
+            <div className="cycle-card-heading"><div><h2>Tujuan & dokumen siklus</h2><p>Tujuan siklus dan dokumen yang dibentuk otomatis dari transaksi.</p></div><BookOpen size={18} /></div>
             <ul className="cycle-goal-list">
               {REVENUE_GOALS.map((goal) => <li key={goal}>{goal}</li>)}
             </ul>
@@ -829,28 +825,12 @@ export function RevenueCycleView({ notify = NOOP, user = null }) {
           <div className="cycle-card-heading"><div><h2>Jurnal siklus pendapatan</h2><p>Faktur kredit: debit Piutang; penjualan tunai: debit Kas; setoran: transfer Kas di Tangan ke Bank.</p></div><Landmark size={18} /></div>
           <JournalList entries={journals} />
         </section>
-        <section className="panel cycle-card" style={{ marginTop: 16 }}>
-          <div className="cycle-card-heading"><div><h2>Contoh jurnal pada BAB V</h2><p>Penjualan kredit Rp500.000 kemudian dilunasi tunai.</p></div><BookOpen size={18} /></div>
-          <div className="cycle-two-column">
-            <div>
-              <p className="cycle-form-intro">Penjualan kredit (pembentukan piutang)</p>
-              <DetailRow label="Piutang Usaha" note="Debit" value={500_000} />
-              <DetailRow label="Pendapatan Penjualan" note="Kredit" value={500_000} />
-            </div>
-            <div>
-              <p className="cycle-form-intro">Penerimaan kas pelunasan</p>
-              <DetailRow label="Kas / Bank" note="Debit" value={500_000} />
-              <DetailRow label="Piutang Usaha" note="Kredit" value={500_000} />
-            </div>
-          </div>
-          <p className="cycle-form-hint">Pada sistem ini pendapatan memakai akun 4100, piutang memakai 1130, kas di tangan 1120, dan kas di bank 1110.</p>
-        </section>
       </>}
 
       {!loading && view === 'controls' && <>
         <div className="cycle-two-column">
           <section className="panel cycle-card">
-            <div className="cycle-card-heading"><div><h2>Pemisahan tugas</h2><p>Slide 11: penjualan, gudang, penagihan, dan penerimaan kas dipisah.</p></div><ShieldCheck size={18} /></div>
+            <div className="cycle-card-heading"><div><h2>Pemisahan tugas</h2><p>Penjualan, gudang, penagihan, dan penerimaan kas dipisah.</p></div><ShieldCheck size={18} /></div>
             {CONTROL_DUTIES.map(([role, note], index) => (
               <div className="cycle-check-row" key={role}>
                 <span className="cycle-check-mark">{String(index + 1).padStart(2, '0')}</span>
@@ -874,7 +854,7 @@ export function RevenueCycleView({ notify = NOOP, user = null }) {
         </div>
 
         <section className="panel cycle-card" style={{ marginTop: 16 }}>
-          <div className="cycle-card-heading"><div><h2>Rekonsiliasi penerimaan kas dengan rekening bank</h2><p>Slide 11: penerimaan kas direkonsiliasi dengan rekening bank perusahaan.</p></div><Landmark size={18} /></div>
+          <div className="cycle-card-heading"><div><h2>Rekonsiliasi penerimaan kas dengan rekening bank</h2><p>Penerimaan kas direkonsiliasi dengan rekening bank perusahaan.</p></div><Landmark size={18} /></div>
           <div style={{ marginBottom: 10 }}>{controlBadge(controls.find((check) => check.kind === 'CASH_RECONCILIATION')?.status)}</div>
           <div className="cycle-breakdown">
             <div>
@@ -919,7 +899,6 @@ export function RevenueCycleView({ notify = NOOP, user = null }) {
         </section>
       </>}
 
-      <div className="cycle-footnote"><FileText size={14} /><span>Seluruh data berasal dari API Finova. Dokumen siklus pendapatan (SO, penyajian, FJ, BKM, setoran bank, kartu piutang) dibentuk otomatis dari transaksi.</span></div>
 
       {customerModal && <Modal
         title={customerModal.id ? 'Ubah pelanggan' : 'Tambah pelanggan'}
